@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# Environment variables
+.env
+
+# Node
+node_modules/
+.next/
+
+# Hardhat files
+/cache
+/artifacts
+/typechain
+/typechain-types
+/coverage
+/coverage.json
+ignition/deployments/chain-31337
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+terra.venv/
+
+# Database
+terra.db

@@ -1,0 +1,9 @@
+body {
+    margin: 0;
+    font-family: sans-serif;
+  }
+  nav a {
+    text-decoration: none;
+    color: blue;
+    margin-right: 1rem;
+  }
