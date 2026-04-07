@@ -175,6 +175,7 @@ def get_market_bot_commentary(slug: str, db: Session = Depends(get_db)):
         BotCommentaryOut(
             id=run.id,
             market_slug=market.slug,
+            bot_profile_id=run.bot_profile_id,
             bot_display_name=run.bot_profile.display_name,
             bot_persona=run.bot_profile.persona,
             strategy_type=run.bot_profile.strategy_type,

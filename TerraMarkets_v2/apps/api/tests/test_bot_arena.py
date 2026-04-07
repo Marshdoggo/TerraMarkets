@@ -155,9 +155,31 @@ class BotArenaTests(unittest.TestCase):
         self.assertEqual(commentary_response.status_code, 200)
         commentary = commentary_response.json()
         self.assertGreaterEqual(len(commentary), 1)
+        self.assertIn("bot_profile_id", commentary[0])
         self.assertIn("bot_display_name", commentary[0])
         self.assertIn("thesis_summary", commentary[0])
         self.assertNotIn("email", commentary[0])
+
+        leaderboard_response = self.client.get("/bots/public/leaderboard")
+        self.assertEqual(leaderboard_response.status_code, 200)
+        leaderboard = leaderboard_response.json()["bots"]
+        self.assertGreaterEqual(len(leaderboard), 3)
+        self.assertIn("portfolio_value", leaderboard[0])
+        self.assertIn("recent_runs", leaderboard[0])
+        self.assertNotIn("email", leaderboard[0])
+
+        bot_id = leaderboard[0]["id"]
+        detail_response = self.client.get(f"/bots/public/{bot_id}")
+        self.assertEqual(detail_response.status_code, 200)
+        detail = detail_response.json()
+        self.assertEqual(detail["id"], bot_id)
+        self.assertIn("open_positions", detail)
+        self.assertIn("settled_positions", detail)
+        self.assertNotIn("email", detail)
+
+        thesis_response = self.client.get("/bots/public/theses")
+        self.assertEqual(thesis_response.status_code, 200)
+        self.assertGreaterEqual(len(thesis_response.json()["theses"]), 1)
 
     def test_non_admin_cannot_access_bot_controls(self):
         register_response = self.client.post("/auth/register", json={"email": "user@example.com", "password": "secret123"})

@@ -1,4 +1,5 @@
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import OddsPieChart from "../../components/OddsPieChart";
 import TimeSeriesChart from "../../components/TimeSeriesChart";
@@ -93,6 +94,15 @@ export default function MarketDetailPage() {
   if (!market) {
     return <p className="muted">Loading market...</p>;
   }
+
+  const botOutcomeCounts = commentary.reduce((counts, item) => {
+    if (item.outcome) {
+      counts[item.outcome] = (counts[item.outcome] || 0) + 1;
+    }
+    return counts;
+  }, {});
+  const activeBotVotes = Object.values(botOutcomeCounts).reduce((total, count) => total + count, 0);
+  const botLeader = Object.entries(botOutcomeCounts).sort((left, right) => right[1] - left[1])[0] || null;
 
   return (
     <div className="grid two">
@@ -249,13 +259,35 @@ export default function MarketDetailPage() {
         ) : null}
 
         <div className="stack">
+          <h2>Bot activity</h2>
+          <div className="grid two">
+            <article className="market-card">
+              <strong>Bot lean</strong>
+              <span>{botLeader ? `${botLeader[0]} (${botLeader[1]} thesis-backed signal${botLeader[1] === 1 ? "" : "s"})` : "No lean yet"}</span>
+              <span className="muted">{activeBotVotes} recent bot theses with explicit outcomes.</span>
+            </article>
+            <article className="market-card">
+              <strong>Disagreement</strong>
+              {Object.keys(botOutcomeCounts).length ? (
+                Object.entries(botOutcomeCounts).map(([label, count]) => (
+                  <span key={label}>
+                    {label}: {count}
+                  </span>
+                ))
+              ) : (
+                <span className="muted">Run bots to compare bullish and bearish theses.</span>
+              )}
+            </article>
+          </div>
           <h2>Bot theses</h2>
           {commentary.length === 0 ? (
             <p className="muted">No bot theses yet. Run a bot cycle to generate commentary for this market.</p>
           ) : null}
           {commentary.map((item) => (
             <article className="market-card" key={item.id}>
-              <strong>{item.bot_display_name}</strong>
+              <strong>
+                <Link href={`/bots/${item.bot_profile_id}`}>{item.bot_display_name}</Link>
+              </strong>
               <span className="muted">{item.strategy_type}</span>
               <span>{item.bot_persona}</span>
               <span>

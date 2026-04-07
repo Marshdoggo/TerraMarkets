@@ -96,6 +96,7 @@ class MarketDetailOut(MarketOut):
 class BotCommentaryOut(BaseModel):
     id: int
     market_slug: Optional[str] = None
+    bot_profile_id: int
     bot_display_name: str
     bot_persona: str
     strategy_type: str

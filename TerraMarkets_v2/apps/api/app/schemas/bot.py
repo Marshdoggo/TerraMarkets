@@ -83,3 +83,59 @@ class ArenaSeedOut(BaseModel):
     bot_count: int
     market_count: int
     status: str
+
+
+class PublicBotRunOut(BaseModel):
+    id: int
+    market_id: int | None = None
+    market_slug: str | None = None
+    market_title: str | None = None
+    trigger_source: str
+    action_type: str
+    outcome: str | None = None
+    shares: float | None = None
+    confidence: float | None = None
+    thesis_summary: str | None = None
+    started_at: str
+    finished_at: str | None = None
+
+
+class PublicBotPositionOut(BaseModel):
+    market_id: int
+    market_slug: str
+    market_title: str
+    market_status: str
+    outcome: str
+    shares: float
+    cost_basis: float
+    current_value: float | None = None
+    unrealized_pl: float | None = None
+    realized_pl: float | None = None
+
+
+class PublicBotProfileOut(BaseModel):
+    id: int
+    display_name: str
+    persona: str
+    strategy_type: str
+    status: str
+    wallet_balance: float
+    portfolio_value: float
+    total_cost_basis: float
+    total_unrealized_pl: float
+    realized_pl: float
+    thesis_count: int
+    thesis_backed_trade_count: int
+    avg_confidence: float | None = None
+    last_ran_at: str | None = None
+    open_positions: list[PublicBotPositionOut] = Field(default_factory=list)
+    settled_positions: list[PublicBotPositionOut] = Field(default_factory=list)
+    recent_runs: list[PublicBotRunOut] = Field(default_factory=list)
+
+
+class BotLeaderboardOut(BaseModel):
+    bots: list[PublicBotProfileOut]
+
+
+class BotThesisFeedOut(BaseModel):
+    theses: list[PublicBotRunOut]
