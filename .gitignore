@@ -8,21 +8,13 @@
 node_modules/
 .next/
 
-# Hardhat files
-/cache
-/artifacts
-/typechain
-/typechain-types
-/coverage
-/coverage.json
-ignition/deployments/chain-31337
-
 # Python
 __pycache__/
 *.pyc
+.pytest_cache/
 venv/
 .venv/
 terra.venv/
 
-# Database
-terra.db
+# Local databases
+*.db
