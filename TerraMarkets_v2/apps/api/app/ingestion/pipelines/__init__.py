@@ -1,0 +1,3 @@
+from app.ingestion.pipelines.donki_solar_flares import DonkiSolarFlarePipeline
+from app.ingestion.pipelines.enso_oni import EnsoONIPipeline
+from app.ingestion.pipelines.usgs_earthquakes import USGSEarthquakePipeline
