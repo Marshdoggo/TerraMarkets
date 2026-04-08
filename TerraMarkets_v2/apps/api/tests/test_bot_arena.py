@@ -18,7 +18,14 @@ from app.models.bot import BotProfile, BotRun
 from app.models.data import DataSourceRun
 from app.models.enums import UserTier
 from app.services.auth_service import register_user
-from app.services.bot_service import HedgerStrategy, OpenAIBotStrategy, SpeculatorStrategy, TrendFollowerStrategy
+from app.services.bot_service import (
+    HedgerStrategy,
+    OpenAIBotStrategy,
+    OpenAIThesisWriter,
+    SpeculatorStrategy,
+    TrendFollowerStrategy,
+    should_generate_thesis_for_decision,
+)
 
 
 class BotArenaTests(unittest.TestCase):
@@ -120,6 +127,99 @@ class BotArenaTests(unittest.TestCase):
             self.assertIn("disabled", decision.thesis_summary.lower())
         finally:
             settings.OPENAI_BOT_ENABLED = original_enabled
+
+    def test_thesis_writer_disabled_keeps_heuristic_thesis(self):
+        original_enabled = settings.OPENAI_BOT_THESIS_ENABLED
+        settings.OPENAI_BOT_THESIS_ENABLED = False
+        try:
+            decision = TrendFollowerStrategy().decide(
+                {
+                    "bot": SimpleNamespace(config_json={"momentum_threshold": 0.02}, strategy_type="trend_follower"),
+                    "prices": {"YES": 0.62, "NO": 0.38},
+                    "snapshots": [SimpleNamespace(prices={"YES": 0.62, "NO": 0.38}), SimpleNamespace(prices={"YES": 0.55, "NO": 0.45})],
+                    "share_budget": 40,
+                }
+            )
+            bot = SimpleNamespace(
+                display_name="Trend Talia",
+                persona="Momentum trader",
+                strategy_type="trend_follower",
+                tool_config_json={"thesis_writer_enabled": True, "voice_style": "Momentum-first", "citation_mode": "stored_datasets_only"},
+            )
+            market_obj = SimpleNamespace(slug="trend-market", title="Trend market", category="climate", description="desc", resolution_criteria="criteria", outcomes=["YES", "NO"])
+            context = {"bot": bot, "market": market_obj, "prices": {"YES": 0.62, "NO": 0.38}, "snapshots": [], "linked_data_points": []}
+            rewritten = OpenAIThesisWriter().rewrite(context=context, decision=decision)
+            self.assertEqual(rewritten.thesis_summary, decision.thesis_summary)
+            self.assertEqual(rewritten.action_type, decision.action_type)
+        finally:
+            settings.OPENAI_BOT_THESIS_ENABLED = original_enabled
+
+    def test_thesis_writer_rewrites_text_without_changing_trade_decision(self):
+        original_enabled = settings.OPENAI_BOT_THESIS_ENABLED
+        original_key = settings.OPENAI_API_KEY
+        original_model = settings.OPENAI_BOT_THESIS_MODEL
+        settings.OPENAI_BOT_THESIS_ENABLED = True
+        settings.OPENAI_API_KEY = "test-key"
+        settings.OPENAI_BOT_THESIS_MODEL = "gpt-5.2"
+        try:
+            decision = TrendFollowerStrategy().decide(
+                {
+                    "bot": SimpleNamespace(config_json={"momentum_threshold": 0.02}, strategy_type="trend_follower"),
+                    "prices": {"YES": 0.62, "NO": 0.38},
+                    "snapshots": [SimpleNamespace(prices={"YES": 0.62, "NO": 0.38}), SimpleNamespace(prices={"YES": 0.55, "NO": 0.45})],
+                    "share_budget": 40,
+                }
+            )
+            bot = SimpleNamespace(
+                display_name="Trend Talia",
+                persona="Momentum trader",
+                strategy_type="trend_follower",
+                tool_config_json={"thesis_writer_enabled": True, "voice_style": "Momentum-first", "citation_mode": "stored_datasets_only"},
+            )
+            market_obj = SimpleNamespace(slug="trend-market", title="Trend market", category="climate", description="desc", resolution_criteria="criteria", outcomes=["YES", "NO"])
+            context = {
+                "bot": bot,
+                "market": market_obj,
+                "prices": {"YES": 0.62, "NO": 0.38},
+                "snapshots": [],
+                "linked_data_points": [
+                    {"source_key": "enso_oni", "series_key": "oni_value", "label": "ENSO benchmark", "notes": "", "recent_points": []}
+                ],
+            }
+
+            class FakeResponse:
+                def raise_for_status(self):
+                    return None
+
+                def json(self):
+                    return {
+                        "output_text": '{"thesis_summary":"Trend Talia sees confirmation building in YES as the tape keeps firming.","confidence":0.88,"citations":["ENSO benchmark (enso_oni/oni_value)","https://example.com"],"voice_tags":["momentum"],"rationale":"Trend is strengthening."}'
+                    }
+
+            with patch("app.services.bot_service.httpx.post", return_value=FakeResponse()):
+                rewritten = OpenAIThesisWriter().rewrite(context=context, decision=decision)
+
+            self.assertEqual(rewritten.action_type, decision.action_type)
+            self.assertEqual(rewritten.outcome, decision.outcome)
+            self.assertEqual(rewritten.shares, decision.shares)
+            self.assertNotEqual(rewritten.thesis_summary, decision.thesis_summary)
+            self.assertEqual(rewritten.citations, ["ENSO benchmark (enso_oni/oni_value)"])
+            self.assertEqual(rewritten.payload["thesis_writer"]["status"], "rewritten")
+        finally:
+            settings.OPENAI_BOT_THESIS_ENABLED = original_enabled
+            settings.OPENAI_API_KEY = original_key
+            settings.OPENAI_BOT_THESIS_MODEL = original_model
+
+    def test_trivial_holds_skip_thesis_generation(self):
+        self.assertFalse(should_generate_thesis_for_decision(SimpleNamespace(action_type="hold", thesis_summary="Too small.")))
+        self.assertTrue(
+            should_generate_thesis_for_decision(
+                SimpleNamespace(
+                    action_type="hold",
+                    thesis_summary="The leader is still ahead, but the spread and signal quality are not strong enough to justify a fresh entry yet.",
+                )
+            )
+        )
 
     def test_seed_default_bots_and_run_cycle_creates_runs_and_orders(self):
         admin_token = self.login("admin@terramarkets.dev", "adminpass")

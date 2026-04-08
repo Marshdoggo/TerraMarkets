@@ -21,10 +21,14 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     OPENAI_BOT_MODEL: str = "gpt-5.2"
     OPENAI_BOT_ENABLED: bool = False
+    OPENAI_BOT_THESIS_ENABLED: bool = False
+    OPENAI_BOT_THESIS_MODEL: str | None = None
 
     def model_post_init(self, __context) -> None:
         if self.DATABASE_URL == "sqlite+pysqlite:///./dev.db":
             self.DATABASE_URL = f"sqlite+pysqlite:///{API_DIR / 'dev.db'}"
+        if not self.OPENAI_BOT_THESIS_MODEL:
+            self.OPENAI_BOT_THESIS_MODEL = self.OPENAI_BOT_MODEL
 
     def allowed_origins_list(self) -> List[str]:
         try:

@@ -40,6 +40,13 @@ DEFAULT_BOT_SPECS = [
         "max_trade_amount": 90,
         "max_market_exposure": 275,
         "config_json": {"momentum_threshold": 0.02, "event_driven_on_data": True},
+        "tool_config_json": {
+            "thesis_writer_enabled": True,
+            "voice_style": "Momentum-first, price-action focused, and crisp. Talk about strengthening trends, confirmation, and follow-through without sounding reckless.",
+            "citation_mode": "stored_datasets_only",
+            "tone_hints": "Confident, concise, tape-reader energy.",
+            "max_thesis_chars": 420,
+        },
         "wallet_funding": 1400,
     },
     {
@@ -52,6 +59,13 @@ DEFAULT_BOT_SPECS = [
         "max_trade_amount": 70,
         "max_market_exposure": 220,
         "config_json": {"value_threshold": 0.42, "min_spread": 0.08, "event_driven_on_data": True},
+        "tool_config_json": {
+            "thesis_writer_enabled": True,
+            "voice_style": "Contrarian, skeptical, and edge-seeking. Emphasize crowd overreaction, stretched pricing, and asymmetric entry points.",
+            "citation_mode": "stored_datasets_only",
+            "tone_hints": "Wry, sharp, and opportunistic without being flippant.",
+            "max_thesis_chars": 420,
+        },
         "wallet_funding": 1300,
     },
     {
@@ -64,6 +78,13 @@ DEFAULT_BOT_SPECS = [
         "max_trade_amount": 55,
         "max_market_exposure": 200,
         "config_json": {"rebalance_threshold": 0.65, "event_driven_on_data": True},
+        "tool_config_json": {
+            "thesis_writer_enabled": True,
+            "voice_style": "Calm, portfolio-aware, and risk-centered. Explain concentration, diversification, and downside control in steady language.",
+            "citation_mode": "stored_datasets_only",
+            "tone_hints": "Measured, composed, and quietly analytical.",
+            "max_thesis_chars": 420,
+        },
         "wallet_funding": 1250,
     },
     {
@@ -76,6 +97,14 @@ DEFAULT_BOT_SPECS = [
         "max_trade_amount": 80,
         "max_market_exposure": 240,
         "config_json": {"event_driven_on_data": True, "mode": "research_adapter"},
+        "tool_config_json": {
+            "adapter": "openai",
+            "thesis_writer_enabled": False,
+            "voice_style": "Research-heavy, synthesis-oriented, and exploratory. Weigh multiple signals and explain uncertainty directly.",
+            "citation_mode": "stored_datasets_only",
+            "tone_hints": "Curious, incisive, and evidence-driven.",
+            "max_thesis_chars": 520,
+        },
         "wallet_funding": 1500,
     },
 ]
@@ -228,6 +257,82 @@ def _bounded_float(value, *, default: float, minimum: float, maximum: float) -> 
     return min(maximum, max(minimum, parsed))
 
 
+def _bot_tool_config(bot: BotProfile | object) -> dict:
+    config = getattr(bot, "tool_config_json", None)
+    return config if isinstance(config, dict) else {}
+
+
+def _recent_snapshot_payload(context: dict, limit: int = 5) -> list[dict]:
+    return [
+        {"event_type": snapshot.event_type, "prices": snapshot.prices, "created_at": str(snapshot.created_at)}
+        for snapshot in context["snapshots"][:limit]
+    ]
+
+
+def _linked_dataset_citations(context: dict) -> list[str]:
+    citations: list[str] = []
+    for dataset in context.get("linked_data_points", []):
+        label = dataset.get("label") or dataset.get("series_key") or dataset.get("source_key") or "dataset"
+        source_key = dataset.get("source_key") or "unknown-source"
+        series_key = dataset.get("series_key") or "unknown-series"
+        citations.append(f"{label} ({source_key}/{series_key})")
+    return citations
+
+
+def should_generate_thesis_for_decision(decision: BotDecision) -> bool:
+    if decision.action_type == "buy":
+        return True
+    if decision.action_type != "hold":
+        return False
+    thesis = (decision.thesis_summary or "").strip()
+    if len(thesis) < 50:
+        return False
+    return len(thesis.split()) >= 8
+
+
+def _sanitize_dataset_citations(citations: list[str] | None, *, allowed: list[str]) -> list[str]:
+    if not citations:
+        return []
+    allowed_map = {entry.lower(): entry for entry in allowed}
+    cleaned: list[str] = []
+    for citation in citations:
+        text = str(citation).strip()
+        if not text:
+            continue
+        if text.lower().startswith("http://") or text.lower().startswith("https://"):
+            continue
+        matched = None
+        lowered = text.lower()
+        for allowed_key, allowed_value in allowed_map.items():
+            if lowered == allowed_key or lowered in allowed_key or allowed_key in lowered:
+                matched = allowed_value
+                break
+        if matched and matched not in cleaned:
+            cleaned.append(matched)
+    return cleaned[:5]
+
+
+def _call_openai_responses(*, model: str, instructions: str, prompt_payload: dict) -> dict:
+    response = httpx.post(
+        "https://api.openai.com/v1/responses",
+        headers={
+            "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model,
+            "input": [
+                {"role": "system", "content": instructions},
+                {"role": "user", "content": json.dumps(prompt_payload, default=str)},
+            ],
+        },
+        timeout=30,
+    )
+    response.raise_for_status()
+    raw_text = _extract_response_text(response.json())
+    return json.loads(raw_text)
+
+
 class OpenAIBotStrategy(StrategyAdapter):
     def decide(self, context: dict) -> BotDecision:
         bot = context["bot"]
@@ -264,10 +369,7 @@ class OpenAIBotStrategy(StrategyAdapter):
                 "resolution_criteria": market.resolution_criteria,
                 "outcomes": allowed_outcomes,
                 "prices": context["prices"],
-                "recent_snapshots": [
-                    {"event_type": snapshot.event_type, "prices": snapshot.prices, "created_at": str(snapshot.created_at)}
-                    for snapshot in context["snapshots"][:5]
-                ],
+                "recent_snapshots": _recent_snapshot_payload(context),
             },
             "risk": {
                 "share_budget": context["share_budget"],
@@ -283,24 +385,11 @@ class OpenAIBotStrategy(StrategyAdapter):
             "Keep thesis_summary to 1-3 concise sentences and do not claim external web research."
         )
         try:
-            response = httpx.post(
-                "https://api.openai.com/v1/responses",
-                headers={
-                    "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": settings.OPENAI_BOT_MODEL,
-                    "input": [
-                        {"role": "system", "content": instructions},
-                        {"role": "user", "content": json.dumps(prompt_payload, default=str)},
-                    ],
-                },
-                timeout=30,
+            parsed = _call_openai_responses(
+                model=settings.OPENAI_BOT_MODEL,
+                instructions=instructions,
+                prompt_payload=prompt_payload,
             )
-            response.raise_for_status()
-            raw_text = _extract_response_text(response.json())
-            parsed = json.loads(raw_text)
         except Exception as exc:
             return BotDecision(
                 action_type="hold",
@@ -337,6 +426,97 @@ class OpenAIBotStrategy(StrategyAdapter):
             thesis_summary=thesis_summary,
             citations=[str(citation)[:500] for citation in citations[:5]],
             payload={"mode": "openai_responses", "model": settings.OPENAI_BOT_MODEL, "rationale": parsed.get("rationale")},
+        )
+
+
+class OpenAIThesisWriter:
+    def rewrite(self, *, context: dict, decision: BotDecision) -> BotDecision:
+        if not settings.OPENAI_BOT_THESIS_ENABLED:
+            return decision
+        if not settings.OPENAI_API_KEY:
+            return decision
+
+        bot = context["bot"]
+        tool_config = _bot_tool_config(bot)
+        if tool_config.get("thesis_writer_enabled") is False:
+            return decision
+        if not should_generate_thesis_for_decision(decision):
+            return decision
+
+        market = context["market"]
+        allowed_citations = _linked_dataset_citations(context)
+        max_thesis_chars = int(tool_config.get("max_thesis_chars", 420))
+        prompt_payload = {
+            "bot": {
+                "display_name": bot.display_name,
+                "persona": bot.persona,
+                "strategy_type": bot.strategy_type,
+                "voice_style": tool_config.get("voice_style"),
+                "tone_hints": tool_config.get("tone_hints"),
+            },
+            "market": {
+                "slug": market.slug,
+                "title": market.title,
+                "category": market.category,
+                "description": market.description,
+                "resolution_criteria": market.resolution_criteria,
+                "outcomes": list(market.outcomes or []),
+                "prices": context["prices"],
+                "recent_snapshots": _recent_snapshot_payload(context),
+            },
+            "decision": {
+                "action_type": decision.action_type,
+                "outcome": decision.outcome,
+                "shares": decision.shares,
+                "confidence": decision.confidence,
+                "thesis_summary": decision.thesis_summary,
+                "payload": decision.payload or {},
+            },
+            "linked_datasets": context.get("linked_data_points", []),
+            "allowed_citations": allowed_citations,
+        }
+        instructions = (
+            "You are polishing a TerraMarkets bot thesis. Preserve the bot's existing action_type, outcome, and overall bias. "
+            "Do not introduce web claims, URLs, or outside research. Use only the provided stored datasets and market context. "
+            "Return strict JSON with keys: thesis_summary, confidence, citations, voice_tags, rationale. "
+            f"Keep thesis_summary in character, 1-3 sentences, and under {max_thesis_chars} characters."
+        )
+        try:
+            parsed = _call_openai_responses(
+                model=settings.OPENAI_BOT_THESIS_MODEL or settings.OPENAI_BOT_MODEL,
+                instructions=instructions,
+                prompt_payload=prompt_payload,
+            )
+        except Exception as exc:
+            payload = dict(decision.payload or {})
+            payload["thesis_writer"] = {"status": "error", "error": str(exc)}
+            decision.payload = payload
+            return decision
+
+        thesis_summary = str(parsed.get("thesis_summary") or decision.thesis_summary or "").strip()
+        if not thesis_summary:
+            return decision
+        citations = _sanitize_dataset_citations(parsed.get("citations"), allowed=allowed_citations)
+        confidence = decision.confidence
+        if parsed.get("confidence") is not None:
+            confidence = _bounded_float(parsed.get("confidence"), default=decision.confidence or 0.4, minimum=0.0, maximum=1.0)
+
+        payload = dict(decision.payload or {})
+        payload["thesis_writer"] = {
+            "status": "rewritten",
+            "model": settings.OPENAI_BOT_THESIS_MODEL or settings.OPENAI_BOT_MODEL,
+            "voice_tags": parsed.get("voice_tags"),
+            "rationale": parsed.get("rationale"),
+            "citation_mode": tool_config.get("citation_mode", "stored_datasets_only"),
+        }
+        return BotDecision(
+            action_type=decision.action_type,
+            outcome=decision.outcome,
+            shares=decision.shares,
+            confidence=confidence,
+            thesis_summary=thesis_summary[:max_thesis_chars],
+            citations=citations or decision.citations,
+            payload=payload,
         )
 
 
@@ -529,7 +709,10 @@ def run_bot_for_market(db: Session, *, bot: BotProfile, market: Market, trigger_
             bot.last_ran_at = utcnow()
             return run
 
-        decision = strategy_for_bot(bot).decide(context)
+        strategy = strategy_for_bot(bot)
+        decision = strategy.decide(context)
+        if not isinstance(strategy, OpenAIBotStrategy):
+            decision = OpenAIThesisWriter().rewrite(context=context, decision=decision)
         action_type = decision.action_type or "hold"
         if action_type != "buy" or not decision.outcome or not decision.shares:
             _finalize_run(run, status="completed", action_type="hold", finished_at=utcnow(), decision=decision)
@@ -646,7 +829,7 @@ def seed_default_bots(db: Session) -> list[BotProfile]:
             max_trade_amount=spec["max_trade_amount"],
             max_market_exposure=spec["max_market_exposure"],
             config_json=spec["config_json"],
-            tool_config_json={"adapter": "deferred"} if spec["strategy_type"] == "openclaw_agent" else None,
+            tool_config_json=spec.get("tool_config_json"),
             wallet_funding=spec["wallet_funding"],
         )
         bots.append(create_bot_profile(db, payload))
