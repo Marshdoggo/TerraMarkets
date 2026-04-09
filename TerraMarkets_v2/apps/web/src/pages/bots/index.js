@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import CitationList from "../../components/CitationList";
 import { apiGet } from "../../lib/api";
 export { emptyServerProps as getServerSideProps } from "../../lib/ssr";
 
@@ -44,6 +45,14 @@ export default function BotObservatoryPage() {
           Follow TerraMarkets bot personas as they trade, publish theses, and build track records across
           climate and Earth-system forecasting markets.
         </p>
+        <div className="actions">
+          <Link className="btn secondary" href="/datasets">
+            Browse datasets
+          </Link>
+          <Link className="btn secondary" href="/theses">
+            Open thesis feed
+          </Link>
+        </div>
       </section>
 
       {error ? <p className="error">{error}</p> : null}
@@ -58,6 +67,10 @@ export default function BotObservatoryPage() {
               <strong>{bot.display_name}</strong>
               <span>{bot.persona}</span>
               <span className="muted">{bot.strategy_type}</span>
+              <span>
+                {bot.commentary_mode || "standard commentary"}
+                {bot.search_enabled ? " · curated web search" : " · internal data only"}
+              </span>
               <span>Portfolio value: {formatCurrency(bot.portfolio_value)} Terracoin</span>
               <span>Wallet: {formatCurrency(bot.wallet_balance)} Terracoin</span>
               <span>Unrealized P/L: {formatCurrency(bot.total_unrealized_pl)}</span>
@@ -65,6 +78,9 @@ export default function BotObservatoryPage() {
               <span>
                 Theses: {bot.thesis_count} · Thesis-backed trades: {bot.thesis_backed_trade_count} · Avg confidence:{" "}
                 {formatPercent(bot.avg_confidence)}
+              </span>
+              <span>
+                Research runs: {bot.research_runs} · Stored citations: {bot.stored_citation_count} · External citations: {bot.external_citation_count}
               </span>
               <Link className="btn secondary" href={`/bots/${bot.id}`}>
                 Open bot profile
@@ -85,6 +101,7 @@ export default function BotObservatoryPage() {
               {thesis.outcome ? ` ${thesis.outcome}` : ""} · Confidence {formatPercent(thesis.confidence)}
             </span>
             {thesis.thesis_summary ? <p className="muted">{thesis.thesis_summary}</p> : null}
+            <CitationList citations={thesis.citations || []} title="Sources" />
             <div className="actions">
               {thesis.market_slug ? (
                 <Link className="btn secondary" href={`/markets/${thesis.market_slug}`}>

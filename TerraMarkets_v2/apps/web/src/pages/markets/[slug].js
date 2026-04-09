@@ -1,6 +1,7 @@
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import CitationList from "../../components/CitationList";
 import OddsPieChart from "../../components/OddsPieChart";
 import TimeSeriesChart from "../../components/TimeSeriesChart";
 import { apiGet, apiPost } from "../../lib/api";
@@ -297,6 +298,7 @@ export default function MarketDetailPage() {
               </span>
               {item.shares ? <span>Shares: {item.shares.toFixed(2)}</span> : null}
               {item.thesis_summary ? <p className="muted">{item.thesis_summary}</p> : null}
+              <CitationList citations={item.citations || []} title="Sources" />
               <span className="muted">{new Date(item.created_at).toLocaleString()}</span>
             </article>
           ))}

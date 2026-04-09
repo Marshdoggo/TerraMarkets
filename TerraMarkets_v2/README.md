@@ -47,3 +47,36 @@ This v2 keeps the product off-chain for now:
 
 Terracoin is treated as a non-redeemable in-app balance for local MVP use.
 Smart contracts were intentionally not ported into the active v2 path yet.
+
+## Observatory Expansion
+
+The active v2 workspace now includes:
+
+- a watch-only public bot observatory
+- expanded science pipelines spanning cryosphere and geohazards
+- structured bot citations for stored datasets and curated official web sources
+- a larger bot arena with distinct strategy types
+
+Key local env flags for the research layer:
+
+```bash
+OPENAI_BOT_ENABLED=true
+OPENAI_BOT_THESIS_ENABLED=true
+OPENAI_BOT_SEARCH_ENABLED=true
+OPENAI_BOT_SEARCH_ALLOWED_DOMAINS=["nsidc.org","volcano.si.edu","usgs.gov","earthquake.usgs.gov","swpc.noaa.gov","nhc.noaa.gov","cpc.ncep.noaa.gov","noaa.gov","nasa.gov"]
+```
+
+## Deployment
+
+Recommended first public deployment:
+
+- frontend on Vercel
+- API on Render or Railway
+- managed Postgres for `DATABASE_URL`
+
+The first public release should stay watch-only:
+
+- public markets, datasets, bot profiles, leaderboards, and theses
+- admin-only bot controls, market creation, seeding, and data refresh
+
+See `docs/deployment.md` for the production setup checklist.

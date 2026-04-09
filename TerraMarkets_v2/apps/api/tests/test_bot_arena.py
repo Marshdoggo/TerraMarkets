@@ -24,6 +24,7 @@ from app.services.bot_service import (
     OpenAIThesisWriter,
     SpeculatorStrategy,
     TrendFollowerStrategy,
+    _normalize_citation_objects,
     should_generate_thesis_for_decision,
 )
 
@@ -203,12 +204,75 @@ class BotArenaTests(unittest.TestCase):
             self.assertEqual(rewritten.outcome, decision.outcome)
             self.assertEqual(rewritten.shares, decision.shares)
             self.assertNotEqual(rewritten.thesis_summary, decision.thesis_summary)
-            self.assertEqual(rewritten.citations, ["ENSO benchmark (enso_oni/oni_value)"])
+            self.assertEqual(rewritten.citations[0]["type"], "stored_dataset")
+            self.assertEqual(rewritten.citations[0]["source_key"], "enso_oni")
             self.assertEqual(rewritten.payload["thesis_writer"]["status"], "rewritten")
         finally:
             settings.OPENAI_BOT_THESIS_ENABLED = original_enabled
             settings.OPENAI_API_KEY = original_key
             settings.OPENAI_BOT_THESIS_MODEL = original_model
+
+    def test_search_assisted_thesis_filters_external_domains(self):
+        original_enabled = settings.OPENAI_BOT_THESIS_ENABLED
+        original_search_enabled = settings.OPENAI_BOT_SEARCH_ENABLED
+        original_key = settings.OPENAI_API_KEY
+        settings.OPENAI_BOT_THESIS_ENABLED = True
+        settings.OPENAI_BOT_SEARCH_ENABLED = True
+        settings.OPENAI_API_KEY = "test-key"
+        try:
+            decision = SimpleNamespace(
+                action_type="hold",
+                outcome=None,
+                shares=None,
+                confidence=0.4,
+                thesis_summary="Consensus still looks too eager given the limited confirmation on hand.",
+                citations=[],
+                payload={},
+            )
+            bot = SimpleNamespace(
+                display_name="Skeptic Sable",
+                persona="Skeptic",
+                strategy_type="skeptical_reviewer",
+                tool_config_json={
+                    "thesis_writer_enabled": True,
+                    "search_enabled": True,
+                    "voice_style": "Skeptical",
+                    "citation_mode": "mixed",
+                    "allowed_domains": ["volcano.si.edu"],
+                },
+            )
+            market_obj = SimpleNamespace(slug="volcano-market", title="Volcano market", category="volcano activity", description="desc", resolution_criteria="criteria", outcomes=["YES", "NO"])
+            context = {"bot": bot, "market": market_obj, "prices": {"YES": 0.6, "NO": 0.4}, "snapshots": [], "linked_data_points": []}
+
+            class FakeResponse:
+                def raise_for_status(self):
+                    return None
+
+                def json(self):
+                    return {
+                        "output_text": '{"thesis_summary":"Sable is staying patient until the official volcano bulletin firms up the case.","confidence":0.51,"citations":[],"voice_tags":["skeptical"],"rationale":"Filtered research."}',
+                        "output": [
+                            {
+                                "type": "web_search_call",
+                                "action": {
+                                    "sources": [
+                                        {"title": "Smithsonian Weekly Report", "url": "https://volcano.si.edu/reports_weekly.cfm"},
+                                        {"title": "Bad Source", "url": "https://example.com/not-allowed"},
+                                    ]
+                                },
+                            }
+                        ],
+                    }
+
+            with patch("app.services.bot_service.httpx.post", return_value=FakeResponse()):
+                rewritten = OpenAIThesisWriter().rewrite(context=context, decision=decision)
+
+            self.assertEqual(len(rewritten.citations), 1)
+            self.assertEqual(rewritten.citations[0]["domain"], "volcano.si.edu")
+        finally:
+            settings.OPENAI_BOT_THESIS_ENABLED = original_enabled
+            settings.OPENAI_BOT_SEARCH_ENABLED = original_search_enabled
+            settings.OPENAI_API_KEY = original_key
 
     def test_trivial_holds_skip_thesis_generation(self):
         self.assertFalse(should_generate_thesis_for_decision(SimpleNamespace(action_type="hold", thesis_summary="Too small.")))
@@ -221,13 +285,27 @@ class BotArenaTests(unittest.TestCase):
             )
         )
 
+    def test_legacy_citation_dicts_are_normalized_for_api_responses(self):
+        citations = _normalize_citation_objects(
+            [
+                {"source_key": "smithsonian_volcanoes", "series_key": "weekly_eruption_count", "numeric_value": 27.0},
+                {"url": "https://volcano.si.edu/reports_weekly.cfm", "title": "Smithsonian Weekly Report"},
+                {"note": "legacy freeform"},
+            ]
+        )
+        self.assertEqual(citations[0]["type"], "stored_dataset")
+        self.assertEqual(citations[0]["display_text"], "smithsonian_volcanoes / weekly_eruption_count")
+        self.assertEqual(citations[1]["type"], "external_web")
+        self.assertEqual(citations[1]["display_text"], "Smithsonian Weekly Report")
+        self.assertEqual(citations[2]["type"], "note")
+
     def test_seed_default_bots_and_run_cycle_creates_runs_and_orders(self):
         admin_token = self.login("admin@terramarkets.dev", "adminpass")
         self.create_market(admin_token, "bot-cycle-market")
 
         seed_response = self.client.post("/bots/seed/defaults", headers={"Authorization": f"Bearer {admin_token}"})
         self.assertEqual(seed_response.status_code, 200)
-        self.assertGreaterEqual(seed_response.json()["bot_count"], 3)
+        self.assertGreaterEqual(seed_response.json()["bot_count"], 9)
 
         cycle_response = self.client.post(
             "/bots/run-cycle",
@@ -258,6 +336,7 @@ class BotArenaTests(unittest.TestCase):
         self.assertIn("bot_profile_id", commentary[0])
         self.assertIn("bot_display_name", commentary[0])
         self.assertIn("thesis_summary", commentary[0])
+        self.assertIn("citations", commentary[0])
         self.assertNotIn("email", commentary[0])
 
         leaderboard_response = self.client.get("/bots/public/leaderboard")
@@ -266,6 +345,7 @@ class BotArenaTests(unittest.TestCase):
         self.assertGreaterEqual(len(leaderboard), 3)
         self.assertIn("portfolio_value", leaderboard[0])
         self.assertIn("recent_runs", leaderboard[0])
+        self.assertIn("search_enabled", leaderboard[0])
         self.assertNotIn("email", leaderboard[0])
 
         bot_id = leaderboard[0]["id"]
@@ -355,6 +435,7 @@ class BotArenaTests(unittest.TestCase):
 
         with (
             patch("app.api.routers.data._ingest_nsidc_fetch", side_effect=lambda db, admin_id: make_run(db, "nsidc_charctic_daily")),
+            patch("app.api.routers.data._ingest_nsidc_antarctic_fetch", side_effect=lambda db, admin_id: make_run(db, "nsidc_antarctic_daily")),
             patch("app.api.routers.data._ingest_pipeline_fetch", side_effect=fake_pipeline_fetch),
         ):
             response = self.client.post("/data/fetch/all", headers={"Authorization": f"Bearer {admin_token}"})
@@ -364,8 +445,10 @@ class BotArenaTests(unittest.TestCase):
         self.assertEqual(payload["status"], "partial_failure")
         statuses = {result["source_key"]: result["status"] for result in payload["results"]}
         self.assertEqual(statuses["nsidc_charctic_daily"], "success")
+        self.assertEqual(statuses["nsidc_antarctic_daily"], "success")
         self.assertEqual(statuses["enso_oni"], "success")
         self.assertEqual(statuses["usgs_earthquakes"], "failed")
+        self.assertEqual(statuses["smithsonian_volcanoes"], "success")
 
 
 if __name__ == "__main__":

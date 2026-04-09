@@ -3,6 +3,17 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class BotCitationOut(BaseModel):
+    type: str
+    label: str | None = None
+    display_text: str | None = None
+    source_key: str | None = None
+    series_key: str | None = None
+    title: str | None = None
+    url: str | None = None
+    domain: str | None = None
+
+
 class BotProfileCreateIn(BaseModel):
     email: str
     password: str = Field(default="botpass123", min_length=8)
@@ -42,6 +53,7 @@ class BotRunOut(BaseModel):
     shares: float | None = None
     confidence: float | None = None
     thesis_summary: str | None = None
+    citations: list[BotCitationOut] = Field(default_factory=list)
     error_message: str | None = None
     order_id: int | None = None
     started_at: str
@@ -63,6 +75,8 @@ class BotProfileOut(BaseModel):
     config_json: dict
     tool_config_json: dict | None = None
     wallet_balance: float
+    commentary_mode: str | None = None
+    search_enabled: bool = False
     last_ran_at: str | None = None
     recent_runs: list[BotRunOut] = Field(default_factory=list)
 
@@ -87,6 +101,10 @@ class ArenaSeedOut(BaseModel):
 
 class PublicBotRunOut(BaseModel):
     id: int
+    bot_profile_id: int | None = None
+    bot_display_name: str | None = None
+    bot_persona: str | None = None
+    strategy_type: str | None = None
     market_id: int | None = None
     market_slug: str | None = None
     market_title: str | None = None
@@ -96,6 +114,7 @@ class PublicBotRunOut(BaseModel):
     shares: float | None = None
     confidence: float | None = None
     thesis_summary: str | None = None
+    citations: list[BotCitationOut] = Field(default_factory=list)
     started_at: str
     finished_at: str | None = None
 
@@ -127,6 +146,11 @@ class PublicBotProfileOut(BaseModel):
     thesis_count: int
     thesis_backed_trade_count: int
     avg_confidence: float | None = None
+    commentary_mode: str | None = None
+    search_enabled: bool = False
+    research_runs: int = 0
+    stored_citation_count: int = 0
+    external_citation_count: int = 0
     last_ran_at: str | None = None
     open_positions: list[PublicBotPositionOut] = Field(default_factory=list)
     settled_positions: list[PublicBotPositionOut] = Field(default_factory=list)

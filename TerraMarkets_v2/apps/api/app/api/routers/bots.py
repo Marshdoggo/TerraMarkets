@@ -35,6 +35,10 @@ router = APIRouter(prefix="/bots", tags=["bots"])
 def _serialize_public_run(run: BotRun) -> PublicBotRunOut:
     return PublicBotRunOut(
         id=run.id,
+        bot_profile_id=run.bot_profile_id,
+        bot_display_name=run.bot_profile.display_name if run.bot_profile else None,
+        bot_persona=run.bot_profile.persona if run.bot_profile else None,
+        strategy_type=run.bot_profile.strategy_type if run.bot_profile else None,
         market_id=run.market_id,
         market_slug=run.market.slug if run.market else None,
         market_title=run.market.title if run.market else None,
@@ -44,6 +48,7 @@ def _serialize_public_run(run: BotRun) -> PublicBotRunOut:
         shares=float(run.shares) if run.shares is not None else None,
         confidence=float(run.confidence) if run.confidence is not None else None,
         thesis_summary=run.thesis_summary,
+        citations=serialize_run(run)["citations"],
         started_at=str(run.started_at),
         finished_at=str(run.finished_at) if run.finished_at else None,
     )
@@ -105,6 +110,16 @@ def _serialize_public_bot(db: Session, bot: BotProfile, include_detail: bool = F
 
     thesis_runs = [run for run in all_runs if run.thesis_summary]
     confidences = [float(run.confidence) for run in thesis_runs if run.confidence is not None]
+    research_runs = [run for run in thesis_runs if isinstance(run.decision_payload_json, dict) and (run.decision_payload_json.get("thesis_writer", {}).get("search_enabled") or run.decision_payload_json.get("search_enabled"))]
+    stored_citations = 0
+    external_citations = 0
+    for run in thesis_runs:
+        for citation in run.citations_json or []:
+            citation_type = citation.get("type") if isinstance(citation, dict) else "note"
+            if citation_type == "stored_dataset":
+                stored_citations += 1
+            elif citation_type == "external_web":
+                external_citations += 1
     portfolio_value = (float(wallet.balance) if wallet else 0.0) + open_value
     return PublicBotProfileOut(
         id=bot.id,
@@ -120,6 +135,11 @@ def _serialize_public_bot(db: Session, bot: BotProfile, include_detail: bool = F
         thesis_count=len(thesis_runs),
         thesis_backed_trade_count=len([run for run in thesis_runs if run.order_id is not None]),
         avg_confidence=(sum(confidences) / len(confidences)) if confidences else None,
+        commentary_mode=(bot.tool_config_json or {}).get("commentary_mode"),
+        search_enabled=bool((bot.tool_config_json or {}).get("search_enabled")),
+        research_runs=len(research_runs),
+        stored_citation_count=stored_citations,
+        external_citation_count=external_citations,
         last_ran_at=str(bot.last_ran_at) if bot.last_ran_at else None,
         open_positions=open_positions if include_detail else [],
         settled_positions=settled_positions if include_detail else [],

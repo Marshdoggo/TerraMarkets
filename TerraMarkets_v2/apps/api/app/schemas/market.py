@@ -5,6 +5,8 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.schemas.bot import BotCitationOut
+
 
 class MarketCreateIn(BaseModel):
     slug: str = Field(..., min_length=3, max_length=120)
@@ -105,6 +107,7 @@ class BotCommentaryOut(BaseModel):
     shares: Optional[float] = None
     confidence: Optional[float] = None
     thesis_summary: Optional[str] = None
+    citations: List[BotCitationOut] = []
     created_at: str
 
 

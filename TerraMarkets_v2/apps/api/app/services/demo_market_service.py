@@ -76,6 +76,65 @@ DEMO_MARKET_CATALOG = {
             },
         ],
     },
+    "nsidc_antarctic_daily": {
+        "pipeline_label": "Antarctic sea ice",
+        "markets": [
+            {
+                "market": {
+                    "slug": "antarctic-sea-ice-maximum-above-18m",
+                    "title": "Will Antarctic sea ice extent exceed 18.0 million sq km before the seasonal maximum?",
+                    "category": "antarctic systems",
+                    "description": "Tracks whether the Antarctic seasonal maximum clears a major threshold in the NSIDC daily record.",
+                    "resolution_criteria": "Resolve YES if the NSIDC Antarctic daily extent dataset records any daily extent above 18.0 million square kilometers before this market closes.",
+                    "close_at_offset_days": 75,
+                    "outcomes": ["YES", "NO"],
+                    "b": 70,
+                },
+                "link": {
+                    "source_key": "nsidc_antarctic_daily",
+                    "series_key": "daily_extent_million_sq_km",
+                    "label": "NSIDC Antarctic sea ice extent",
+                    "notes": "Daily Antarctic sea ice extent from NSIDC Sea Ice Today.",
+                },
+            },
+            {
+                "market": {
+                    "slug": "antarctic-sea-ice-below-last-year",
+                    "title": "Will Antarctic sea ice extent finish the month below the same date last year?",
+                    "category": "antarctic systems",
+                    "description": "Comparative cryosphere market built on the rolling Antarctic extent series.",
+                    "resolution_criteria": "Resolve YES if the latest NSIDC Antarctic daily extent available on the final market date is lower than the observation from exactly one year earlier.",
+                    "close_at_offset_days": 45,
+                    "outcomes": ["YES", "NO"],
+                    "b": 62,
+                },
+                "link": {
+                    "source_key": "nsidc_antarctic_daily",
+                    "series_key": "daily_extent_million_sq_km",
+                    "label": "NSIDC Antarctic sea ice extent",
+                    "notes": "Daily Antarctic sea ice extent from NSIDC Sea Ice Today.",
+                },
+            },
+            {
+                "market": {
+                    "slug": "antarctic-sea-ice-weekly-rebound",
+                    "title": "Will Antarctic sea ice extent rise over the next full 7-day window?",
+                    "category": "antarctic systems",
+                    "description": "Short-horizon Antarctic timing market around weekly directional change.",
+                    "resolution_criteria": "Resolve YES if the latest NSIDC Antarctic daily extent available at market close is higher than the value recorded seven days earlier.",
+                    "close_at_offset_days": 21,
+                    "outcomes": ["YES", "NO"],
+                    "b": 46,
+                },
+                "link": {
+                    "source_key": "nsidc_antarctic_daily",
+                    "series_key": "daily_extent_million_sq_km",
+                    "label": "NSIDC Antarctic sea ice extent",
+                    "notes": "Daily Antarctic sea ice extent from NSIDC Sea Ice Today.",
+                },
+            },
+        ],
+    },
     "enso_oni": {
         "pipeline_label": "ENSO / ONI",
         "markets": [
@@ -131,6 +190,65 @@ DEMO_MARKET_CATALOG = {
                     "series_key": "roni_index",
                     "label": "Relative Oceanic Nino Index",
                     "notes": "NOAA CPC Relative ONI monthly series.",
+                },
+            },
+        ],
+    },
+    "smithsonian_volcanoes": {
+        "pipeline_label": "Smithsonian volcanoes",
+        "markets": [
+            {
+                "market": {
+                    "slug": "volcano-weekly-eruptions-above-10",
+                    "title": "Will the next Smithsonian weekly report list more than 10 erupting volcanoes?",
+                    "category": "volcano activity",
+                    "description": "Event-count market tied to the Smithsonian weekly volcanic activity report.",
+                    "resolution_criteria": "Resolve YES if the next linked Smithsonian weekly volcanic activity observation records a weekly eruption count above 10.",
+                    "close_at_offset_days": 21,
+                    "outcomes": ["YES", "NO"],
+                    "b": 52,
+                },
+                "link": {
+                    "source_key": "smithsonian_volcanoes",
+                    "series_key": "weekly_eruption_count",
+                    "label": "Weekly eruption count",
+                    "notes": "Count of erupting volcanoes from the Smithsonian weekly report.",
+                },
+            },
+            {
+                "market": {
+                    "slug": "volcano-active-count-above-15",
+                    "title": "Will active volcano count remain above 15 in the next report?",
+                    "category": "volcano activity",
+                    "description": "Tracks whether a broad set of volcanoes stays active week over week.",
+                    "resolution_criteria": "Resolve YES if the next linked Smithsonian weekly report records an active volcano count above 15.",
+                    "close_at_offset_days": 21,
+                    "outcomes": ["YES", "NO"],
+                    "b": 48,
+                },
+                "link": {
+                    "source_key": "smithsonian_volcanoes",
+                    "series_key": "active_volcano_count",
+                    "label": "Active volcano count",
+                    "notes": "Count of active volcanoes from the Smithsonian weekly report.",
+                },
+            },
+            {
+                "market": {
+                    "slug": "volcano-weekly-eruptions-rise",
+                    "title": "Will weekly eruption count rise versus the previous Smithsonian report?",
+                    "category": "volcano activity",
+                    "description": "Comparative market on whether global volcanic activity intensifies from one report to the next.",
+                    "resolution_criteria": "Resolve YES if the newest linked weekly eruption count is greater than the previous linked weekly eruption count before this market closes.",
+                    "close_at_offset_days": 28,
+                    "outcomes": ["YES", "NO"],
+                    "b": 50,
+                },
+                "link": {
+                    "source_key": "smithsonian_volcanoes",
+                    "series_key": "weekly_eruption_count",
+                    "label": "Weekly eruption count",
+                    "notes": "Count of erupting volcanoes from the Smithsonian weekly report.",
                 },
             },
         ],

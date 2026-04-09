@@ -7,9 +7,17 @@ from io import StringIO
 import httpx
 
 NSIDC_CHARCTIC_DAILY_URL = "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v4.0.csv"
+NSIDC_ANTARCTIC_DAILY_URL = "https://noaadata.apps.nsidc.org/NOAA/G02135/south/daily/data/S_seaice_extent_daily_v4.0.csv"
 
 
-def parse_nsidc_daily_extent_csv(csv_text: str, *, days: int = 60) -> list[dict]:
+def parse_nsidc_daily_extent_csv(
+    csv_text: str,
+    *,
+    days: int = 60,
+    hemisphere: str = "north",
+    series_key: str = "daily_extent_million_sq_km",
+    label: str = "Arctic sea ice extent",
+) -> list[dict]:
     header_index = None
     lines = csv_text.splitlines()
     for index, line in enumerate(lines):
@@ -52,15 +60,15 @@ def parse_nsidc_daily_extent_csv(csv_text: str, *, days: int = 60) -> list[dict]
         observed_at = datetime(year, month, day, tzinfo=timezone.utc)
         points.append(
             {
-                "series_key": "daily_extent_million_sq_km",
-                "label": "Arctic sea ice extent",
+                "series_key": series_key,
+                "label": label,
                 "numeric_value": extent,
                 "unit": "million sq km",
                 "observed_at": observed_at.isoformat(),
                 "metadata_json": {
                     "source": "nsidc_charctic",
                     "dataset": "G02135",
-                    "hemisphere": "north",
+                    "hemisphere": hemisphere,
                 },
             }
         )
@@ -74,7 +82,7 @@ def parse_nsidc_daily_extent_csv(csv_text: str, *, days: int = 60) -> list[dict]
 def fetch_nsidc_charctic_daily(*, days: int = 60, source_key: str = "nsidc_charctic_daily") -> dict:
     response = httpx.get(NSIDC_CHARCTIC_DAILY_URL, timeout=30)
     response.raise_for_status()
-    points = parse_nsidc_daily_extent_csv(response.text, days=days)
+    points = parse_nsidc_daily_extent_csv(response.text, days=days, hemisphere="north", label="Arctic sea ice extent")
     latest = points[-1]
 
     return {
@@ -84,6 +92,33 @@ def fetch_nsidc_charctic_daily(*, days: int = 60, source_key: str = "nsidc_charc
         ),
         "payload": {
             "source_url": NSIDC_CHARCTIC_DAILY_URL,
+            "point_count": len(points),
+            "days_requested": days,
+            "latest_series_key": latest["series_key"],
+        },
+        "points": points,
+        "source_key": source_key,
+    }
+
+
+def fetch_nsidc_antarctic_daily(*, days: int = 60, source_key: str = "nsidc_antarctic_daily") -> dict:
+    response = httpx.get(NSIDC_ANTARCTIC_DAILY_URL, timeout=30)
+    response.raise_for_status()
+    points = parse_nsidc_daily_extent_csv(
+        response.text,
+        days=days,
+        hemisphere="south",
+        label="Antarctic sea ice extent",
+    )
+    latest = points[-1]
+
+    return {
+        "summary": (
+            f"NSIDC Antarctic sea ice extent through {latest['observed_at']} "
+            f"at {latest['numeric_value']} {latest['unit']}"
+        ),
+        "payload": {
+            "source_url": NSIDC_ANTARCTIC_DAILY_URL,
             "point_count": len(points),
             "days_requested": days,
             "latest_series_key": latest["series_key"],

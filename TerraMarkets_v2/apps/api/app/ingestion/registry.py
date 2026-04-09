@@ -1,11 +1,19 @@
 from __future__ import annotations
 
-from app.ingestion.pipelines import DonkiSolarFlarePipeline, EnsoONIPipeline, USGSEarthquakePipeline
+from app.ingestion.pipelines import (
+    AntarcticSeaIcePipeline,
+    DonkiSolarFlarePipeline,
+    EnsoONIPipeline,
+    SmithsonianVolcanoPipeline,
+    USGSEarthquakePipeline,
+)
 
 PIPELINE_REGISTRY = {
+    AntarcticSeaIcePipeline.source_key: AntarcticSeaIcePipeline(),
     EnsoONIPipeline.source_key: EnsoONIPipeline(),
     USGSEarthquakePipeline.source_key: USGSEarthquakePipeline(),
     DonkiSolarFlarePipeline.source_key: DonkiSolarFlarePipeline(),
+    SmithsonianVolcanoPipeline.source_key: SmithsonianVolcanoPipeline(),
 }
 
 

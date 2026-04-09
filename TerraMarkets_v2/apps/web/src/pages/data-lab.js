@@ -22,6 +22,14 @@ const PIPELINE_CONTROLS = [
     requestLabel: "NOAA CPC ENSO refresh",
   },
   {
+    key: "nsidc_antarctic_daily",
+    label: "Antarctic sea ice",
+    description: "Fetches the rolling 365-day NSIDC Antarctic extent series and appends only new observations.",
+    fetchPath: "/data/fetch/nsidc-antarctic",
+    fetchBody: { days: 365 },
+    requestLabel: "NSIDC Antarctic sea ice extent refresh",
+  },
+  {
     key: "usgs_earthquakes",
     label: "USGS earthquakes",
     description: "Fetches the USGS monthly GeoJSON earthquake feed and appends only unseen events.",
@@ -37,9 +45,33 @@ const PIPELINE_CONTROLS = [
     fetchBody: { source_key: "nasa_donki_solar_flares" },
     requestLabel: "NASA DONKI solar flare refresh",
   },
+  {
+    key: "smithsonian_volcanoes",
+    label: "Smithsonian volcanoes",
+    description: "Fetches the weekly Smithsonian volcanic activity report and appends derived eruption and active-volcano counts.",
+    fetchPath: "/data/fetch/smithsonian-volcanoes",
+    fetchBody: { source_key: "smithsonian_volcanoes" },
+    backfillPath: "/data/fetch/smithsonian-volcanoes/backfill",
+    backfillBody: { source_key: "smithsonian_volcanoes", weeks: 26, prune_invalid_existing: true },
+    requestLabel: "Smithsonian weekly volcanic activity refresh",
+  },
 ];
 
 const DATASET_RANGE_PRESETS = {
+  "nsidc_charctic_daily:daily_extent_million_sq_km": [
+    { key: "30d", label: "1M", days: 30 },
+    { key: "90d", label: "3M", days: 90 },
+    { key: "365d", label: "1Y", days: 365 },
+    { key: "3y", label: "3Y", days: 365 * 3 },
+    { key: "all", label: "All", days: null },
+  ],
+  "nsidc_antarctic_daily:daily_extent_million_sq_km": [
+    { key: "30d", label: "1M", days: 30 },
+    { key: "90d", label: "3M", days: 90 },
+    { key: "365d", label: "1Y", days: 365 },
+    { key: "3y", label: "3Y", days: 365 * 3 },
+    { key: "all", label: "All", days: null },
+  ],
   "enso_oni:oni_index": [
     { key: "365d", label: "1Y", days: 365 },
     { key: "3y", label: "3Y", days: 365 * 3 },
@@ -60,6 +92,18 @@ const DATASET_RANGE_PRESETS = {
     { key: "14d", label: "2W", days: 14 },
     { key: "30d", label: "1M", days: 30 },
     { key: "60d", label: "2M", days: 60 },
+    { key: "90d", label: "3M", days: 90 },
+    { key: "365d", label: "1Y", days: 365 },
+    { key: "all", label: "All", days: null },
+  ],
+  "smithsonian_volcanoes:weekly_eruption_count": [
+    { key: "30d", label: "1M", days: 30 },
+    { key: "90d", label: "3M", days: 90 },
+    { key: "365d", label: "1Y", days: 365 },
+    { key: "all", label: "All", days: null },
+  ],
+  "smithsonian_volcanoes:active_volcano_count": [
+    { key: "30d", label: "1M", days: 30 },
     { key: "90d", label: "3M", days: 90 },
     { key: "365d", label: "1Y", days: 365 },
     { key: "all", label: "All", days: null },
@@ -208,6 +252,19 @@ export default function DataLabPage() {
     }
   }
 
+  async function handleBackfillVolcanoHistory(control) {
+    setStatus("");
+    setError("");
+    try {
+      const run = await apiPost(control.backfillPath, control.backfillBody);
+      const inserted = run?.points?.length ?? 0;
+      setStatus(`Backfilled ${control.label} history. ${inserted} observations were included in the backfill run.`);
+      await loadRuns();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function handleRequestFetch(control) {
     setStatus("");
     setError("");
@@ -255,9 +312,16 @@ export default function DataLabPage() {
               <span className="muted">{control.key}</span>
               <span>{control.description}</span>
               {me?.tier === "admin" ? (
-                <button className="btn secondary" onClick={() => handleFetchPipeline(control)} type="button">
-                  Fetch latest data
-                </button>
+                <div className="actions">
+                  <button className="btn secondary" onClick={() => handleFetchPipeline(control)} type="button">
+                    Fetch latest data
+                  </button>
+                  {control.backfillPath ? (
+                    <button className="btn secondary" onClick={() => handleBackfillVolcanoHistory(control)} type="button">
+                      Backfill history
+                    </button>
+                  ) : null}
+                </div>
               ) : me ? (
                 <button className="btn secondary" onClick={() => handleRequestFetch(control)} type="button">
                   Request refresh

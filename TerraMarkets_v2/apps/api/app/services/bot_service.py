@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from urllib.parse import urlparse
 from threading import Lock, Thread
 from time import sleep
 
@@ -106,6 +107,126 @@ DEFAULT_BOT_SPECS = [
             "max_thesis_chars": 520,
         },
         "wallet_funding": 1500,
+    },
+    {
+        "email": "event.eli@bots.terramarkets.dev",
+        "display_name": "Event Eli",
+        "persona": "Fast-reacting event chaser who pounces when linked data moves suddenly and the market has not fully repriced.",
+        "strategy_type": "event_chaser",
+        "cadence_minutes": 12,
+        "bankroll_target": 1325,
+        "max_trade_amount": 72,
+        "max_market_exposure": 215,
+        "config_json": {"event_delta_threshold": 0.5, "event_driven_on_data": True},
+        "tool_config_json": {
+            "thesis_writer_enabled": True,
+            "voice_style": "Urgent, alert, and event-driven. Focus on fresh catalysts and fast repricing windows.",
+            "citation_mode": "stored_datasets_only",
+            "tone_hints": "Quick, vivid, and tactical.",
+            "max_thesis_chars": 420,
+        },
+        "wallet_funding": 1325,
+    },
+    {
+        "email": "seasonal.sierra@bots.terramarkets.dev",
+        "display_name": "Seasonal Sierra",
+        "persona": "Cryosphere climatologist who compares current readings against recent baselines and seasonal context before trading.",
+        "strategy_type": "seasonal_climatologist",
+        "cadence_minutes": 18,
+        "bankroll_target": 1450,
+        "max_trade_amount": 68,
+        "max_market_exposure": 225,
+        "config_json": {"seasonal_deviation_threshold": 0.35, "event_driven_on_data": True},
+        "tool_config_json": {
+            "thesis_writer_enabled": True,
+            "voice_style": "Measured, climatological, and context-rich. Compare current values against norms and seasonal pacing.",
+            "citation_mode": "stored_datasets_only",
+            "tone_hints": "Calm, data-literate, and interpretive.",
+            "max_thesis_chars": 440,
+        },
+        "wallet_funding": 1450,
+    },
+    {
+        "email": "signal.sage@bots.terramarkets.dev",
+        "display_name": "Signal Sage",
+        "persona": "Cross-signal analyst who waits for multiple linked datasets to point in the same direction before entering.",
+        "strategy_type": "cross_signal_analyst",
+        "cadence_minutes": 22,
+        "bankroll_target": 1380,
+        "max_trade_amount": 66,
+        "max_market_exposure": 205,
+        "config_json": {"min_confirming_signals": 2, "event_driven_on_data": True},
+        "tool_config_json": {
+            "thesis_writer_enabled": True,
+            "voice_style": "Synthesis-first and conditional. Emphasize corroboration, agreement across signals, and disciplined patience.",
+            "citation_mode": "stored_datasets_only",
+            "tone_hints": "Structured, cross-checking, and evidence-stacking.",
+            "max_thesis_chars": 460,
+        },
+        "wallet_funding": 1380,
+    },
+    {
+        "email": "maker.mika@bots.terramarkets.dev",
+        "display_name": "Maker Mika",
+        "persona": "Probability market maker who leans into balanced books, small trades, and shaving back extreme spreads.",
+        "strategy_type": "probability_market_maker",
+        "cadence_minutes": 16,
+        "bankroll_target": 1200,
+        "max_trade_amount": 42,
+        "max_market_exposure": 170,
+        "config_json": {"tight_market_spread": 0.18, "event_driven_on_data": False},
+        "tool_config_json": {
+            "thesis_writer_enabled": True,
+            "voice_style": "Liquidity-minded and pragmatic. Talk about spreads, balance, and keeping odds honest.",
+            "citation_mode": "stored_datasets_only",
+            "tone_hints": "Dry, tidy, and mechanism-aware.",
+            "max_thesis_chars": 380,
+        },
+        "wallet_funding": 1200,
+    },
+    {
+        "email": "skeptic.sable@bots.terramarkets.dev",
+        "display_name": "Skeptic Sable",
+        "persona": "Critical reviewer who challenges consensus, prefers restraint, and writes sharp counter-theses when markets look overconfident.",
+        "strategy_type": "skeptical_reviewer",
+        "cadence_minutes": 24,
+        "bankroll_target": 1360,
+        "max_trade_amount": 58,
+        "max_market_exposure": 190,
+        "config_json": {"overconfidence_threshold": 0.68, "event_driven_on_data": True},
+        "tool_config_json": {
+            "thesis_writer_enabled": True,
+            "search_enabled": True,
+            "voice_style": "Contrarian, precise, and interrogative. Stress what evidence the market may be glossing over.",
+            "citation_mode": "mixed",
+            "commentary_mode": "search_assisted_thesis",
+            "tone_hints": "Skeptical, elegant, and unsparing.",
+            "max_sources_per_run": 3,
+            "max_thesis_chars": 500,
+        },
+        "wallet_funding": 1360,
+    },
+    {
+        "email": "meta.morgan@bots.terramarkets.dev",
+        "display_name": "Meta Morgan",
+        "persona": "Meta analyst who watches the other bots, studies consensus and disagreement, and trades when the arena's confidence profile shifts.",
+        "strategy_type": "meta_analyst",
+        "cadence_minutes": 20,
+        "bankroll_target": 1425,
+        "max_trade_amount": 64,
+        "max_market_exposure": 210,
+        "config_json": {"consensus_threshold": 0.65, "event_driven_on_data": True},
+        "tool_config_json": {
+            "thesis_writer_enabled": True,
+            "search_enabled": True,
+            "voice_style": "Meta-reasoning and observatory-aware. Reference bot disagreement, consensus, and changing confidence.",
+            "citation_mode": "mixed",
+            "commentary_mode": "meta_research",
+            "tone_hints": "Reflective, strategic, and comparative.",
+            "max_sources_per_run": 2,
+            "max_thesis_chars": 520,
+        },
+        "wallet_funding": 1425,
     },
 ]
 
@@ -226,6 +347,223 @@ class HedgerStrategy(StrategyAdapter):
         )
 
 
+def _linked_signal_features(context: dict) -> list[dict]:
+    features: list[dict] = []
+    for dataset in context.get("linked_data_points", []):
+        numeric_points = [point for point in dataset.get("recent_points", []) if point.get("numeric_value") is not None]
+        if not numeric_points:
+            continue
+        latest = float(numeric_points[-1]["numeric_value"])
+        previous = float(numeric_points[-2]["numeric_value"]) if len(numeric_points) > 1 else None
+        delta = latest - previous if previous is not None else None
+        baseline_points = [float(point["numeric_value"]) for point in numeric_points[-6:]]
+        baseline = sum(baseline_points) / len(baseline_points) if baseline_points else latest
+        deviation = latest - baseline
+        features.append(
+            {
+                "source_key": dataset.get("source_key"),
+                "series_key": dataset.get("series_key"),
+                "label": dataset.get("label"),
+                "latest": latest,
+                "previous": previous,
+                "delta": delta,
+                "baseline": baseline,
+                "deviation": deviation,
+            }
+        )
+    return features
+
+
+def _default_binary_outcomes(context: dict) -> tuple[str | None, str | None]:
+    outcomes = list(context["market"].outcomes or [])
+    yes_outcome = next((outcome for outcome in outcomes if outcome.upper() == "YES"), outcomes[0] if outcomes else None)
+    no_outcome = next((outcome for outcome in outcomes if outcome.upper() == "NO"), outcomes[1] if len(outcomes) > 1 else None)
+    return yes_outcome, no_outcome
+
+
+class EventChaserStrategy(StrategyAdapter):
+    def decide(self, context: dict) -> BotDecision:
+        features = _linked_signal_features(context)
+        if not features:
+            return BotDecision(action_type="hold", confidence=0.24, thesis_summary="No linked event signals are available to chase yet.")
+        strongest = max(features, key=lambda feature: abs(feature["delta"] or 0.0))
+        if abs(strongest["delta"] or 0.0) < float(context["bot"].config_json.get("event_delta_threshold", 0.5)):
+            return BotDecision(
+                action_type="hold",
+                confidence=0.31,
+                thesis_summary=f"{strongest['label']} moved, but not enough to signal an event repricing opportunity.",
+                payload={"signal": strongest},
+            )
+        yes_outcome, no_outcome = _default_binary_outcomes(context)
+        if yes_outcome and no_outcome:
+            target = yes_outcome if (strongest["delta"] or 0.0) > 0 else no_outcome
+        else:
+            target = max(context["prices"].items(), key=lambda item: item[1])[0]
+        shares = context["share_budget"] / max(float(context["prices"].get(target, 0.18)), 0.12)
+        return BotDecision(
+            action_type="buy",
+            outcome=target,
+            shares=max(1.0, round(shares, 2)),
+            confidence=min(0.9, 0.5 + min(abs(strongest["delta"] or 0.0) / 5, 0.35)),
+            thesis_summary=f"{strongest['label']} just lurched by {strongest['delta'] or 0.0:.3f}; the market may still be catching up.",
+            payload={"signal": strongest},
+        )
+
+
+class SeasonalClimatologistStrategy(StrategyAdapter):
+    def decide(self, context: dict) -> BotDecision:
+        features = _linked_signal_features(context)
+        if not features:
+            return BotDecision(action_type="hold", confidence=0.25, thesis_summary="No seasonal baseline is available for this market yet.")
+        feature = max(features, key=lambda item: abs(item["deviation"]))
+        threshold = float(context["bot"].config_json.get("seasonal_deviation_threshold", 0.35))
+        if abs(feature["deviation"]) < threshold:
+            return BotDecision(
+                action_type="hold",
+                confidence=0.33,
+                thesis_summary=f"{feature['label']} is close to its recent baseline, so seasonal context is not yet decisive.",
+                payload={"signal": feature},
+            )
+        yes_outcome, no_outcome = _default_binary_outcomes(context)
+        if not yes_outcome or not no_outcome:
+            return BotDecision(action_type="hold", confidence=0.28, thesis_summary="Seasonal climatologist works best on binary markets.")
+        target = yes_outcome if feature["deviation"] > 0 else no_outcome
+        shares = context["share_budget"] / max(float(context["prices"].get(target, 0.2)), 0.12)
+        return BotDecision(
+            action_type="buy",
+            outcome=target,
+            shares=max(1.0, round(shares, 2)),
+            confidence=min(0.86, 0.48 + min(abs(feature["deviation"]) / 4, 0.28)),
+            thesis_summary=f"{feature['label']} is running {feature['deviation']:+.3f} versus its recent baseline, which shifts the seasonal case toward {target}.",
+            payload={"signal": feature},
+        )
+
+
+class CrossSignalAnalystStrategy(StrategyAdapter):
+    def decide(self, context: dict) -> BotDecision:
+        features = _linked_signal_features(context)
+        min_signals = int(context["bot"].config_json.get("min_confirming_signals", 2))
+        actionable = [feature for feature in features if feature["delta"] is not None]
+        if len(actionable) < min_signals:
+            return BotDecision(
+                action_type="hold",
+                confidence=0.29,
+                thesis_summary="Cross-signal analyst is waiting for more linked datasets to confirm one another.",
+                payload={"signal_count": len(actionable)},
+            )
+        positive = sum(1 for feature in actionable if (feature["delta"] or 0.0) > 0)
+        negative = sum(1 for feature in actionable if (feature["delta"] or 0.0) < 0)
+        if positive == negative:
+            return BotDecision(
+                action_type="hold",
+                confidence=0.34,
+                thesis_summary="Linked datasets disagree with one another, so there is no clean cross-signal entry.",
+                payload={"positive": positive, "negative": negative},
+            )
+        yes_outcome, no_outcome = _default_binary_outcomes(context)
+        if not yes_outcome or not no_outcome:
+            return BotDecision(action_type="hold", confidence=0.27, thesis_summary="Cross-signal analyst prefers binary markets.")
+        target = yes_outcome if positive > negative else no_outcome
+        shares = context["share_budget"] / max(float(context["prices"].get(target, 0.18)), 0.12)
+        return BotDecision(
+            action_type="buy",
+            outcome=target,
+            shares=max(1.0, round(shares, 2)),
+            confidence=min(0.88, 0.5 + min(abs(positive - negative) / max(len(actionable), 1), 0.3)),
+            thesis_summary=f"{abs(positive - negative)} more linked signals point toward {target} than against it, so the cross-signal case is lined up.",
+            payload={"positive": positive, "negative": negative, "signals": actionable[:4]},
+        )
+
+
+class ProbabilityMarketMakerStrategy(StrategyAdapter):
+    def decide(self, context: dict) -> BotDecision:
+        prices = context["prices"]
+        ranked = sorted(prices.items(), key=lambda item: item[1])
+        if len(ranked) < 2:
+            return BotDecision(action_type="hold", confidence=0.2, thesis_summary="Not enough outcomes to tighten the spread.")
+        spread = float(ranked[-1][1]) - float(ranked[0][1])
+        threshold = float(context["bot"].config_json.get("tight_market_spread", 0.18))
+        if spread > threshold:
+            return BotDecision(
+                action_type="hold",
+                confidence=0.3,
+                thesis_summary=f"Spread is already wide at {spread:.2f}; market maker prefers to wait for a tighter book.",
+                payload={"spread": spread},
+            )
+        target, target_price = ranked[0]
+        shares = max(1.0, round((context["share_budget"] * 0.6) / max(float(target_price), 0.15), 2))
+        return BotDecision(
+            action_type="buy",
+            outcome=target,
+            shares=shares,
+            confidence=0.44,
+            thesis_summary=f"Odds are relatively balanced, so adding small size to {target} helps keep the book honest.",
+            payload={"spread": spread, "target": target},
+        )
+
+
+class SkepticalReviewerStrategy(StrategyAdapter):
+    def decide(self, context: dict) -> BotDecision:
+        prices = context["prices"]
+        ranked = sorted(prices.items(), key=lambda item: item[1], reverse=True)
+        if not ranked:
+            return BotDecision(action_type="hold", confidence=0.22, thesis_summary="No priced outcomes are available to review.")
+        leader, leader_price = ranked[0]
+        cheapest_outcome, cheapest_price = sorted(prices.items(), key=lambda item: item[1])[0]
+        threshold = float(context["bot"].config_json.get("overconfidence_threshold", 0.68))
+        if float(leader_price) <= threshold:
+            return BotDecision(
+                action_type="hold",
+                confidence=0.37,
+                thesis_summary=f"The market leader {leader} is notable but not overextended enough to fade yet.",
+                payload={"leader": leader, "leader_price": float(leader_price)},
+            )
+        shares = context["share_budget"] / max(float(cheapest_price), 0.12)
+        return BotDecision(
+            action_type="buy",
+            outcome=cheapest_outcome,
+            shares=max(1.0, round(shares, 2)),
+            confidence=min(0.8, 0.42 + float(leader_price) / 2),
+            thesis_summary=f"{leader} looks overconfident at {float(leader_price):.2f}, so the reviewer is leaning into the neglected side {cheapest_outcome}.",
+            payload={"leader": leader, "leader_price": float(leader_price), "target": cheapest_outcome},
+        )
+
+
+class MetaAnalystStrategy(StrategyAdapter):
+    def decide(self, context: dict) -> BotDecision:
+        recent_runs = context.get("recent_market_runs", [])
+        signed_runs = [run for run in recent_runs if run.get("outcome")]
+        if len(signed_runs) < 3:
+            return BotDecision(
+                action_type="hold",
+                confidence=0.26,
+                thesis_summary="Meta analyst wants a thicker stack of bot takes before trading on arena sentiment.",
+                payload={"recent_run_count": len(signed_runs)},
+            )
+        counts: dict[str, int] = {}
+        for run in signed_runs:
+            counts[run["outcome"]] = counts.get(run["outcome"], 0) + 1
+        leader_outcome, leader_votes = max(counts.items(), key=lambda item: item[1])
+        total_votes = sum(counts.values())
+        consensus = leader_votes / max(total_votes, 1)
+        threshold = float(context["bot"].config_json.get("consensus_threshold", 0.65))
+        if consensus >= threshold:
+            target = leader_outcome
+            thesis = f"The bot arena is converging on {target}, and consensus is strong enough to lean with it."
+        else:
+            target = min(context["prices"].items(), key=lambda item: item[1])[0]
+            thesis = f"Bot disagreement is still elevated, so the meta analyst is taking the under-owned side {target}."
+        shares = context["share_budget"] / max(float(context["prices"].get(target, 0.18)), 0.12)
+        return BotDecision(
+            action_type="buy",
+            outcome=target,
+            shares=max(1.0, round(shares, 2)),
+            confidence=min(0.82, 0.45 + consensus / 2),
+            thesis_summary=thesis,
+            payload={"consensus": consensus, "counts": counts},
+        )
+
+
 class AgentPolicyAdapter(StrategyAdapter):
     def decide(self, context: dict) -> BotDecision:
         strategy_type = context["bot"].strategy_type
@@ -279,6 +617,24 @@ def _linked_dataset_citations(context: dict) -> list[str]:
     return citations
 
 
+def _stored_dataset_citation_objects(context: dict) -> list[dict]:
+    citations: list[dict] = []
+    for dataset in context.get("linked_data_points", []):
+        label = dataset.get("label") or dataset.get("series_key") or dataset.get("source_key") or "dataset"
+        source_key = dataset.get("source_key") or "unknown-source"
+        series_key = dataset.get("series_key") or "unknown-series"
+        citations.append(
+            {
+                "type": "stored_dataset",
+                "label": label,
+                "display_text": f"{label} ({source_key}/{series_key})",
+                "source_key": source_key,
+                "series_key": series_key,
+            }
+        )
+    return citations
+
+
 def should_generate_thesis_for_decision(decision: BotDecision) -> bool:
     if decision.action_type == "buy":
         return True
@@ -290,11 +646,12 @@ def should_generate_thesis_for_decision(decision: BotDecision) -> bool:
     return len(thesis.split()) >= 8
 
 
-def _sanitize_dataset_citations(citations: list[str] | None, *, allowed: list[str]) -> list[str]:
+def _sanitize_dataset_citations(citations: list[str] | None, *, allowed: list[dict]) -> list[dict]:
     if not citations:
         return []
-    allowed_map = {entry.lower(): entry for entry in allowed}
+    allowed_map = {(entry.get("display_text") or "").lower(): entry for entry in allowed}
     cleaned: list[str] = []
+    matched_citations: list[dict] = []
     for citation in citations:
         text = str(citation).strip()
         if not text:
@@ -307,12 +664,84 @@ def _sanitize_dataset_citations(citations: list[str] | None, *, allowed: list[st
             if lowered == allowed_key or lowered in allowed_key or allowed_key in lowered:
                 matched = allowed_value
                 break
-        if matched and matched not in cleaned:
-            cleaned.append(matched)
-    return cleaned[:5]
+        display_text = matched.get("display_text") if matched else None
+        if matched and display_text not in cleaned:
+            cleaned.append(display_text)
+            matched_citations.append(matched)
+    return matched_citations[:5]
 
 
-def _call_openai_responses(*, model: str, instructions: str, prompt_payload: dict) -> dict:
+def _domains_for_bot(bot: BotProfile | object) -> list[str]:
+    tool_config = _bot_tool_config(bot)
+    bot_domains = tool_config.get("allowed_domains")
+    if isinstance(bot_domains, list) and bot_domains:
+        return [str(domain) for domain in bot_domains]
+    return settings.openai_bot_search_allowed_domains_list()
+
+
+def _search_enabled_for_bot(bot: BotProfile | object) -> bool:
+    return bool(settings.OPENAI_BOT_SEARCH_ENABLED and _bot_tool_config(bot).get("search_enabled"))
+
+
+def _extract_web_citations(payload: dict, *, allowed_domains: list[str]) -> list[dict]:
+    allowed = {domain.lower() for domain in allowed_domains}
+    citations: list[dict] = []
+
+    def append_if_allowed(url: str | None, *, title: str | None = None):
+        if not url:
+            return
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").lower()
+        if not hostname:
+            return
+        if not any(hostname == domain or hostname.endswith(f".{domain}") for domain in allowed):
+            return
+        citation = {
+            "type": "external_web",
+            "title": title or hostname,
+            "url": url,
+            "domain": hostname,
+            "display_text": title or hostname,
+        }
+        if citation not in citations:
+            citations.append(citation)
+
+    for output in payload.get("output", []) or []:
+        action = output.get("action") or {}
+        for source in action.get("sources", []) or []:
+            append_if_allowed(source.get("url"), title=source.get("title"))
+        for content in output.get("content", []) or []:
+            for annotation in content.get("annotations", []) or []:
+                append_if_allowed(annotation.get("url"), title=annotation.get("title"))
+    return citations[:5]
+
+
+def _normalize_citation_objects(citations: list | None) -> list[dict]:
+    normalized: list[dict] = []
+    for citation in citations or []:
+        if isinstance(citation, dict):
+            item = dict(citation)
+            if not item.get("type"):
+                if item.get("url") or item.get("domain") or item.get("title"):
+                    item["type"] = "external_web"
+                elif item.get("source_key") or item.get("series_key"):
+                    item["type"] = "stored_dataset"
+                else:
+                    item["type"] = "note"
+            if not item.get("display_text"):
+                if item.get("label"):
+                    item["display_text"] = str(item["label"])
+                elif item.get("title"):
+                    item["display_text"] = str(item["title"])
+                elif item.get("source_key") and item.get("series_key"):
+                    item["display_text"] = f"{item['source_key']} / {item['series_key']}"
+            normalized.append(item)
+        elif citation:
+            normalized.append({"type": "note", "display_text": str(citation), "label": str(citation)})
+    return normalized
+
+
+def _call_openai_responses(*, model: str, instructions: str, prompt_payload: dict, tools: list[dict] | None = None, include: list[str] | None = None) -> tuple[dict, dict]:
     response = httpx.post(
         "https://api.openai.com/v1/responses",
         headers={
@@ -325,12 +754,15 @@ def _call_openai_responses(*, model: str, instructions: str, prompt_payload: dic
                 {"role": "system", "content": instructions},
                 {"role": "user", "content": json.dumps(prompt_payload, default=str)},
             ],
+            **({"tools": tools} if tools else {}),
+            **({"include": include} if include else {}),
         },
         timeout=30,
     )
     response.raise_for_status()
-    raw_text = _extract_response_text(response.json())
-    return json.loads(raw_text)
+    payload = response.json()
+    raw_text = _extract_response_text(payload)
+    return json.loads(raw_text), payload
 
 
 class OpenAIBotStrategy(StrategyAdapter):
@@ -379,16 +811,27 @@ class OpenAIBotStrategy(StrategyAdapter):
             "linked_datasets": context.get("linked_data_points", []),
         }
         instructions = (
-            "You are a TerraMarkets forecasting bot. Use only the provided market and stored dataset context. "
+            "You are a TerraMarkets forecasting bot. Use the provided market and stored dataset context. "
             "Return strict JSON with keys: action_type, outcome, shares, confidence, thesis_summary, citations, rationale. "
             "action_type must be buy or hold. If buying, outcome must be one of the allowed market outcomes. "
-            "Keep thesis_summary to 1-3 concise sentences and do not claim external web research."
+            "Keep thesis_summary to 1-3 concise sentences."
         )
+        tools = None
+        include = None
+        allowed_domains = _domains_for_bot(bot)
+        if _search_enabled_for_bot(bot):
+            tools = [{"type": "web_search_preview", "search_context_size": "medium"}]
+            include = ["web_search_call.action.sources"]
+            instructions += f" You may use web search, but only cite official domains from this allowlist: {', '.join(allowed_domains)}."
+        else:
+            instructions += " Do not claim external web research."
         try:
-            parsed = _call_openai_responses(
+            parsed, raw_response = _call_openai_responses(
                 model=settings.OPENAI_BOT_MODEL,
                 instructions=instructions,
                 prompt_payload=prompt_payload,
+                tools=tools,
+                include=include,
             )
         except Exception as exc:
             return BotDecision(
@@ -417,15 +860,21 @@ class OpenAIBotStrategy(StrategyAdapter):
             requested_shares = None
 
         thesis_summary = str(parsed.get("thesis_summary") or "No thesis supplied.").strip()[:1200]
-        citations = parsed.get("citations") if isinstance(parsed.get("citations"), list) else []
+        citations = _normalize_citation_objects(parsed.get("citations") if isinstance(parsed.get("citations"), list) else [])
+        citations.extend(_extract_web_citations(raw_response, allowed_domains=allowed_domains))
         return BotDecision(
             action_type=action_type,
             outcome=outcome,
             shares=round(float(requested_shares), 6) if requested_shares else None,
             confidence=confidence,
             thesis_summary=thesis_summary,
-            citations=[str(citation)[:500] for citation in citations[:5]],
-            payload={"mode": "openai_responses", "model": settings.OPENAI_BOT_MODEL, "rationale": parsed.get("rationale")},
+            citations=citations[:5],
+            payload={
+                "mode": "openai_responses",
+                "model": settings.OPENAI_BOT_MODEL,
+                "rationale": parsed.get("rationale"),
+                "search_enabled": bool(tools),
+            },
         )
 
 
@@ -444,8 +893,9 @@ class OpenAIThesisWriter:
             return decision
 
         market = context["market"]
-        allowed_citations = _linked_dataset_citations(context)
+        allowed_citations = _stored_dataset_citation_objects(context)
         max_thesis_chars = int(tool_config.get("max_thesis_chars", 420))
+        allowed_domains = _domains_for_bot(bot)
         prompt_payload = {
             "bot": {
                 "display_name": bot.display_name,
@@ -453,6 +903,7 @@ class OpenAIThesisWriter:
                 "strategy_type": bot.strategy_type,
                 "voice_style": tool_config.get("voice_style"),
                 "tone_hints": tool_config.get("tone_hints"),
+                "commentary_mode": tool_config.get("commentary_mode", "thesis_writer"),
             },
             "market": {
                 "slug": market.slug,
@@ -473,19 +924,28 @@ class OpenAIThesisWriter:
                 "payload": decision.payload or {},
             },
             "linked_datasets": context.get("linked_data_points", []),
-            "allowed_citations": allowed_citations,
+            "allowed_citations": [citation.get("display_text") for citation in allowed_citations],
         }
         instructions = (
             "You are polishing a TerraMarkets bot thesis. Preserve the bot's existing action_type, outcome, and overall bias. "
-            "Do not introduce web claims, URLs, or outside research. Use only the provided stored datasets and market context. "
             "Return strict JSON with keys: thesis_summary, confidence, citations, voice_tags, rationale. "
             f"Keep thesis_summary in character, 1-3 sentences, and under {max_thesis_chars} characters."
         )
+        tools = None
+        include = None
+        if _search_enabled_for_bot(bot):
+            tools = [{"type": "web_search_preview", "search_context_size": "medium"}]
+            include = ["web_search_call.action.sources"]
+            instructions += f" You may add official-source web context, but only from these domains: {', '.join(allowed_domains)}."
+        else:
+            instructions += " Do not introduce web claims, URLs, or outside research. Use only the provided stored datasets and market context."
         try:
-            parsed = _call_openai_responses(
+            parsed, raw_response = _call_openai_responses(
                 model=settings.OPENAI_BOT_THESIS_MODEL or settings.OPENAI_BOT_MODEL,
                 instructions=instructions,
                 prompt_payload=prompt_payload,
+                tools=tools,
+                include=include,
             )
         except Exception as exc:
             payload = dict(decision.payload or {})
@@ -497,6 +957,7 @@ class OpenAIThesisWriter:
         if not thesis_summary:
             return decision
         citations = _sanitize_dataset_citations(parsed.get("citations"), allowed=allowed_citations)
+        citations.extend(_extract_web_citations(raw_response, allowed_domains=allowed_domains))
         confidence = decision.confidence
         if parsed.get("confidence") is not None:
             confidence = _bounded_float(parsed.get("confidence"), default=decision.confidence or 0.4, minimum=0.0, maximum=1.0)
@@ -508,6 +969,7 @@ class OpenAIThesisWriter:
             "voice_tags": parsed.get("voice_tags"),
             "rationale": parsed.get("rationale"),
             "citation_mode": tool_config.get("citation_mode", "stored_datasets_only"),
+            "search_enabled": bool(tools),
         }
         return BotDecision(
             action_type=decision.action_type,
@@ -515,7 +977,7 @@ class OpenAIThesisWriter:
             shares=decision.shares,
             confidence=confidence,
             thesis_summary=thesis_summary[:max_thesis_chars],
-            citations=citations or decision.citations,
+            citations=(citations or _normalize_citation_objects(decision.citations))[:5],
             payload=payload,
         )
 
@@ -524,6 +986,12 @@ STRATEGIES: dict[str, StrategyAdapter] = {
     "trend_follower": TrendFollowerStrategy(),
     "speculator": SpeculatorStrategy(),
     "hedger": HedgerStrategy(),
+    "event_chaser": EventChaserStrategy(),
+    "seasonal_climatologist": SeasonalClimatologistStrategy(),
+    "cross_signal_analyst": CrossSignalAnalystStrategy(),
+    "probability_market_maker": ProbabilityMarketMakerStrategy(),
+    "skeptical_reviewer": SkepticalReviewerStrategy(),
+    "meta_analyst": MetaAnalystStrategy(),
     "openclaw_agent": OpenAIBotStrategy(),
 }
 
@@ -544,6 +1012,7 @@ def serialize_run(run: BotRun) -> dict:
         "shares": float(run.shares) if run.shares is not None else None,
         "confidence": float(run.confidence) if run.confidence is not None else None,
         "thesis_summary": run.thesis_summary,
+        "citations": _normalize_citation_objects(run.citations_json),
         "error_message": run.error_message,
         "order_id": run.order_id,
         "started_at": str(run.started_at),
@@ -568,6 +1037,8 @@ def serialize_profile(db: Session, bot: BotProfile, include_runs: bool = True) -
         "config_json": bot.config_json or {},
         "tool_config_json": bot.tool_config_json,
         "wallet_balance": float(wallet.balance) if wallet else 0.0,
+        "commentary_mode": _bot_tool_config(bot).get("commentary_mode"),
+        "search_enabled": bool(_bot_tool_config(bot).get("search_enabled")),
         "last_ran_at": str(bot.last_ran_at) if bot.last_ran_at else None,
         "recent_runs": [],
     }
@@ -652,6 +1123,19 @@ def build_context(db: Session, *, bot: BotProfile, market: Market) -> dict:
             }
         )
     share_budget = compute_share_budget(bot, wallet, total_exposure) if wallet else 0.0
+    recent_market_runs = [
+        {
+            "bot_profile_id": run.bot_profile_id,
+            "action_type": run.action_type,
+            "outcome": run.outcome,
+            "confidence": float(run.confidence) if run.confidence is not None else None,
+            "thesis_summary": run.thesis_summary,
+        }
+        for run in db.scalars(
+            select(BotRun).where(BotRun.market_id == market.id, BotRun.status == "completed").order_by(BotRun.id.desc()).limit(20)
+        ).all()
+        if run.bot_profile_id != bot.id
+    ]
     return {
         "bot": bot,
         "market": market,
@@ -663,6 +1147,7 @@ def build_context(db: Session, *, bot: BotProfile, market: Market) -> dict:
         "linked_series": linked_series,
         "linked_data_points": linked_data_points,
         "share_budget": share_budget,
+        "recent_market_runs": recent_market_runs,
     }
 
 

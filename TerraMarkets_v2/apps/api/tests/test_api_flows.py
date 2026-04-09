@@ -3,12 +3,14 @@ from __future__ import annotations
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.core import db as core_db
+from app.ingestion.types import NormalizedObservation, PipelineFetchResult
 from app.main import app
 from app.models import auth, data, market, market_data_link, market_snapshot, order, position, purchase_request, user, wallet
 from app.models.enums import UserTier
@@ -220,6 +222,89 @@ class ApiFlowTests(unittest.TestCase):
         admin_list = self.client.get("/data/fetch-requests", headers={"Authorization": f"Bearer {admin_token}"})
         self.assertEqual(admin_list.status_code, 200)
         self.assertEqual(admin_list.json()[0]["source_key"], "nsidc_charctic_daily")
+
+    def test_pipeline_catalog_lists_expanded_sources(self):
+        response = self.client.get("/data/pipelines")
+        self.assertEqual(response.status_code, 200)
+        source_keys = {item["source_key"] for item in response.json()}
+        self.assertIn("nsidc_antarctic_daily", source_keys)
+        self.assertIn("smithsonian_volcanoes", source_keys)
+
+    @patch("app.api.routers.data.fetch_smithsonian_weekly_history")
+    def test_smithsonian_backfill_prunes_invalid_legacy_points(self, mock_backfill):
+        admin_login = self.client.post("/auth/login", json={"email": "admin@terramarkets.dev", "password": "adminpass"})
+        admin_token = admin_login.json()["access_token"]
+
+        db = self.testing_session_local()
+        legacy_run = data.DataSourceRun(
+            source_key="smithsonian_volcanoes",
+            status="success",
+            summary="legacy bad row",
+            payload={},
+        )
+        db.add(legacy_run)
+        db.flush()
+        db.add(
+            data.DataPoint(
+                source_run_id=legacy_run.id,
+                source_key="smithsonian_volcanoes",
+                series_key="weekly_eruption_count",
+                label="Weekly eruption count",
+                numeric_value=111,
+                unit="volcanoes",
+                observed_at=datetime(1999, 9, 21, tzinfo=timezone.utc),
+                metadata_json={},
+            )
+        )
+        db.commit()
+        db.close()
+
+        mock_backfill.return_value = PipelineFetchResult(
+            source="smithsonian_volcanoes",
+            summary="Backfilled volcano history",
+            payload={},
+            records=[
+                NormalizedObservation(
+                    source="smithsonian_volcanoes",
+                    metric="weekly_eruption_count",
+                    timestamp="2026-03-26T00:00:00+00:00",
+                    value=9,
+                    metadata={"label": "Weekly eruption count", "unit": "volcanoes"},
+                ),
+                NormalizedObservation(
+                    source="smithsonian_volcanoes",
+                    metric="active_volcano_count",
+                    timestamp="2026-03-26T00:00:00+00:00",
+                    value=8,
+                    metadata={"label": "Active volcano count", "unit": "volcanoes"},
+                ),
+            ],
+        )
+
+        response = self.client.post(
+            "/data/fetch/smithsonian-volcanoes/backfill",
+            json={"weeks": 4, "prune_invalid_existing": True},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        db = self.testing_session_local()
+        legacy_points = db.scalars(
+            select(data.DataPoint).where(
+                data.DataPoint.source_key == "smithsonian_volcanoes",
+                data.DataPoint.observed_at < datetime(2005, 1, 1, tzinfo=timezone.utc),
+            )
+        ).all()
+        current_points = db.scalars(
+            select(data.DataPoint).where(
+                data.DataPoint.source_key == "smithsonian_volcanoes",
+                data.DataPoint.observed_at == datetime(2026, 3, 26, tzinfo=timezone.utc),
+            )
+        ).all()
+        db.close()
+
+        self.assertEqual(legacy_points, [])
+        self.assertEqual(len(current_points), 2)
 
 
 if __name__ == "__main__":

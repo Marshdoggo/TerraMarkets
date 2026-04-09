@@ -88,6 +88,11 @@ class NsidcCharcticFetchIn(BaseModel):
     source_key: str = "nsidc_charctic_daily"
 
 
+class NsidcAntarcticFetchIn(BaseModel):
+    days: int = 365
+    source_key: str = "nsidc_antarctic_daily"
+
+
 class EnsoOniFetchIn(BaseModel):
     source_key: str = "enso_oni"
 
@@ -100,3 +105,13 @@ class DonkiSolarFlareFetchIn(BaseModel):
     source_key: str = "nasa_donki_solar_flares"
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+
+
+class SmithsonianVolcanoFetchIn(BaseModel):
+    source_key: str = "smithsonian_volcanoes"
+
+
+class SmithsonianVolcanoBackfillIn(BaseModel):
+    source_key: str = "smithsonian_volcanoes"
+    weeks: int = 26
+    prune_invalid_existing: bool = True

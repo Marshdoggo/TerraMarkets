@@ -22,7 +22,9 @@ export default function NavBar() {
           TerraMarkets_v2
         </Link>
         <Link href="/markets">Markets</Link>
+        <Link href="/datasets">Datasets</Link>
         <Link href="/bots">Bot Observatory</Link>
+        <Link href="/theses">Theses</Link>
         <Link href="/profile">Profile</Link>
         <Link href="/portfolio">Portfolio</Link>
         <Link href="/buy-terracoin">Buy Terracoin</Link>

@@ -63,21 +63,21 @@ class DemoMarketTests(unittest.TestCase):
         first_seed = self.client.post("/markets/seed/demo", headers={"Authorization": f"Bearer {admin_token}"})
         self.assertEqual(first_seed.status_code, 200)
         first_payload = first_seed.json()
-        self.assertEqual(len(first_payload["pipelines"]), 4)
-        self.assertEqual(first_payload["created_markets"], 12)
-        self.assertEqual(first_payload["created_links"], 12)
+        self.assertEqual(len(first_payload["pipelines"]), 6)
+        self.assertEqual(first_payload["created_markets"], 18)
+        self.assertEqual(first_payload["created_links"], 18)
 
         second_seed = self.client.post("/markets/seed/demo", headers={"Authorization": f"Bearer {admin_token}"})
         self.assertEqual(second_seed.status_code, 200)
         second_payload = second_seed.json()
         self.assertEqual(second_payload["created_markets"], 0)
         self.assertEqual(second_payload["created_links"], 0)
-        self.assertEqual(second_payload["existing_markets"], 12)
-        self.assertEqual(second_payload["existing_links"], 12)
+        self.assertEqual(second_payload["existing_markets"], 18)
+        self.assertEqual(second_payload["existing_links"], 18)
 
         markets_response = self.client.get("/markets")
         self.assertEqual(markets_response.status_code, 200)
-        self.assertEqual(len(markets_response.json()), 12)
+        self.assertEqual(len(markets_response.json()), 18)
 
     def test_non_admin_cannot_seed_demo_markets(self):
         register_response = self.client.post("/auth/register", json={"email": "member@example.com", "password": "secret123"})
@@ -94,8 +94,10 @@ class DemoMarketTests(unittest.TestCase):
 
         expected_links = {
             "arctic-sea-ice-minimum-2026": ("nsidc_charctic_daily", "daily_extent_million_sq_km"),
+            "antarctic-sea-ice-maximum-above-18m": ("nsidc_antarctic_daily", "daily_extent_million_sq_km"),
             "enso-oni-above-1-next-release": ("enso_oni", "oni_index"),
             "earthquake-m7-this-month": ("usgs_earthquakes", "earthquake_magnitude"),
+            "volcano-weekly-eruptions-above-10": ("smithsonian_volcanoes", "weekly_eruption_count"),
             "solar-flare-m-class-next-30d": ("nasa_donki_solar_flares", "solar_flare_intensity"),
         }
         for slug, (source_key, series_key) in expected_links.items():
@@ -114,11 +116,11 @@ class DemoMarketTests(unittest.TestCase):
         )
         self.assertEqual(cycle_response.status_code, 200)
         runs = cycle_response.json()
-        self.assertGreaterEqual(len(runs), 4)
+        self.assertGreaterEqual(len(runs), 9)
 
         db = self.testing_session_local()
         try:
-            self.assertGreaterEqual(len(db.scalars(select(BotRun)).all()), 4)
+            self.assertGreaterEqual(len(db.scalars(select(BotRun)).all()), 9)
         finally:
             db.close()
 

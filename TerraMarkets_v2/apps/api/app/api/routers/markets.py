@@ -27,6 +27,7 @@ from app.schemas.market import (
     TradeIn,
     TradeOut,
 )
+from app.services.bot_service import serialize_run
 from app.services.demo_market_service import seed_demo_markets
 from app.services.trading_service import execute_buy, get_market_by_slug, market_prices, record_market_snapshot, resolve_and_settle
 from app.services.data_service import get_latest_point_for_series, list_recent_points_for_series
@@ -184,6 +185,7 @@ def get_market_bot_commentary(slug: str, db: Session = Depends(get_db)):
             shares=float(run.shares) if run.shares is not None else None,
             confidence=float(run.confidence) if run.confidence is not None else None,
             thesis_summary=run.thesis_summary,
+            citations=serialize_run(run)["citations"],
             created_at=str(run.finished_at or run.started_at),
         )
         for run in runs

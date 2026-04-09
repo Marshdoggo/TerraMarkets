@@ -23,18 +23,39 @@ class Settings(BaseSettings):
     OPENAI_BOT_ENABLED: bool = False
     OPENAI_BOT_THESIS_ENABLED: bool = False
     OPENAI_BOT_THESIS_MODEL: str | None = None
+    OPENAI_BOT_SEARCH_ENABLED: bool = False
+    OPENAI_BOT_SEARCH_MODEL: str | None = None
+    OPENAI_BOT_SEARCH_ALLOWED_DOMAINS: str = '["nsidc.org","volcano.si.edu","usgs.gov","earthquake.usgs.gov","swpc.noaa.gov","nhc.noaa.gov","cpc.ncep.noaa.gov","noaa.gov","nasa.gov"]'
 
     def model_post_init(self, __context) -> None:
         if self.DATABASE_URL == "sqlite+pysqlite:///./dev.db":
             self.DATABASE_URL = f"sqlite+pysqlite:///{API_DIR / 'dev.db'}"
         if not self.OPENAI_BOT_THESIS_MODEL:
             self.OPENAI_BOT_THESIS_MODEL = self.OPENAI_BOT_MODEL
+        if not self.OPENAI_BOT_SEARCH_MODEL:
+            self.OPENAI_BOT_SEARCH_MODEL = self.OPENAI_BOT_MODEL
 
     def allowed_origins_list(self) -> List[str]:
         try:
             return list(json.loads(self.ALLOWED_ORIGINS))
         except Exception:
             return ["http://localhost:3000"]
+
+    def openai_bot_search_allowed_domains_list(self) -> List[str]:
+        try:
+            return list(json.loads(self.OPENAI_BOT_SEARCH_ALLOWED_DOMAINS))
+        except Exception:
+            return [
+                "nsidc.org",
+                "volcano.si.edu",
+                "usgs.gov",
+                "earthquake.usgs.gov",
+                "swpc.noaa.gov",
+                "nhc.noaa.gov",
+                "cpc.ncep.noaa.gov",
+                "noaa.gov",
+                "nasa.gov",
+            ]
 
 
 settings = Settings()

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 
+import CitationList from "../../components/CitationList";
 import { apiGet } from "../../lib/api";
 export { emptyServerProps as getServerSideProps } from "../../lib/ssr";
 
@@ -61,6 +62,17 @@ export default function BotProfilePage() {
             <span>Realized P/L: {formatCurrency(bot.realized_pl)}</span>
             <span>Avg confidence: {formatPercent(bot.avg_confidence)}</span>
           </article>
+          <article className="panel stack">
+            <strong>Research mode</strong>
+            <span>{bot.commentary_mode || "standard commentary"}</span>
+            <span>{bot.search_enabled ? "Curated web search enabled" : "Stored data only"}</span>
+          </article>
+          <article className="panel stack">
+            <strong>Source usage</strong>
+            <span>Research runs: {bot.research_runs}</span>
+            <span>Stored citations: {bot.stored_citation_count}</span>
+            <span>External citations: {bot.external_citation_count}</span>
+          </article>
         </div>
       </section>
 
@@ -110,6 +122,7 @@ export default function BotProfilePage() {
             </span>
             {run.shares ? <span>Shares: {run.shares.toFixed(2)}</span> : null}
             {run.thesis_summary ? <p className="muted">{run.thesis_summary}</p> : null}
+            <CitationList citations={run.citations || []} title="Sources" />
             {run.market_slug ? (
               <Link className="btn secondary" href={`/markets/${run.market_slug}`}>
                 Open market

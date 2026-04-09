@@ -19,6 +19,13 @@ const INGEST_CONTROLS = [
     fetchBody: { source_key: "enso_oni" },
   },
   {
+    key: "nsidc_antarctic_daily",
+    label: "Antarctic sea ice",
+    description: "Fetches the rolling 365-day NSIDC Antarctic window and appends only new observations.",
+    fetchPath: "/data/fetch/nsidc-antarctic",
+    fetchBody: { days: 365 },
+  },
+  {
     key: "usgs_earthquakes",
     label: "USGS earthquakes",
     description: "Fetches the USGS monthly GeoJSON feed and appends only unseen events.",
@@ -31,6 +38,15 @@ const INGEST_CONTROLS = [
     description: "Fetches the DONKI solar flare feed and appends only unseen flare events.",
     fetchPath: "/data/fetch/donki-solar-flares",
     fetchBody: { source_key: "nasa_donki_solar_flares" },
+  },
+  {
+    key: "smithsonian_volcanoes",
+    label: "Smithsonian volcanoes",
+    description: "Fetches the weekly Smithsonian volcanic activity report and appends eruption/activity counts.",
+    fetchPath: "/data/fetch/smithsonian-volcanoes",
+    fetchBody: { source_key: "smithsonian_volcanoes" },
+    backfillPath: "/data/fetch/smithsonian-volcanoes/backfill",
+    backfillBody: { source_key: "smithsonian_volcanoes", weeks: 26, prune_invalid_existing: true },
   },
 ];
 
@@ -53,13 +69,67 @@ const LINK_DEFAULTS_BY_CATEGORY = {
     label: "Earthquake magnitude",
     notes: "USGS rolling monthly earthquake magnitudes.",
   },
+  "antarctic systems": {
+    source_key: "nsidc_antarctic_daily",
+    series_key: "daily_extent_million_sq_km",
+    label: "NSIDC Antarctic sea ice extent",
+    notes: "Daily Antarctic sea ice extent from NSIDC Sea Ice Today.",
+  },
   "solar flares": {
     source_key: "nasa_donki_solar_flares",
     series_key: "solar_flare_intensity",
     label: "Solar flare intensity",
     notes: "NASA DONKI flare intensity observations.",
   },
+  "volcano activity": {
+    source_key: "smithsonian_volcanoes",
+    series_key: "weekly_eruption_count",
+    label: "Weekly eruption count",
+    notes: "Weekly volcanic activity counts derived from the Smithsonian report.",
+  },
 };
+
+const MARKET_TEMPLATES = [
+  {
+    key: "antarctic-threshold",
+    label: "Antarctic threshold",
+    category: "antarctic systems",
+    market: {
+      slug: "antarctic-sea-ice-threshold",
+      title: "Will Antarctic sea ice extent exceed a chosen threshold before close?",
+      description: "Template for Antarctic threshold markets linked to NSIDC daily extent.",
+      resolution_criteria: "Resolve YES if the linked NSIDC Antarctic daily extent series crosses the stated threshold before this market closes.",
+      outcomes: "YES,NO",
+      b: "58",
+    },
+  },
+  {
+    key: "volcano-count",
+    label: "Volcano count",
+    category: "volcano activity",
+    market: {
+      slug: "volcano-weekly-count-template",
+      title: "Will the next Smithsonian weekly report exceed a count threshold?",
+      description: "Template for eruption-count or active-volcano-count markets.",
+      resolution_criteria: "Resolve YES if the linked Smithsonian weekly count is above the stated threshold in the next qualifying report before market close.",
+      outcomes: "YES,NO",
+      b: "50",
+    },
+  },
+  {
+    key: "kp-preview",
+    label: "Geomagnetic preview",
+    category: "space weather",
+    market: {
+      slug: "kp-threshold-template",
+      title: "Will the daily planetary Kp index exceed a storm threshold?",
+      description: "Forward template for future NOAA SWPC Kp markets.",
+      resolution_criteria: "Resolve YES if the linked Kp series exceeds the stated threshold before market close.",
+      outcomes: "YES,NO",
+      b: "52",
+    },
+  },
+];
 
 function getDefaultLinkDraft(category, title = "Reference series") {
   const normalized = (category || "").trim().toLowerCase();
@@ -104,6 +174,14 @@ export default function AdminPage() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [resolveSelections, setResolveSelections] = useState({});
+
+  function applyTemplate(template) {
+    setMarket((current) => ({
+      ...current,
+      ...template.market,
+      category: template.category,
+    }));
+  }
 
   async function loadMarkets() {
     try {
@@ -305,6 +383,19 @@ export default function AdminPage() {
     }
   }
 
+  async function handleBackfillVolcanoHistory(control) {
+    setError("");
+    setStatus("");
+    try {
+      const run = await apiPost(control.backfillPath, control.backfillBody);
+      const inserted = run?.points?.length ?? 0;
+      setStatus(`Backfilled ${control.label} history. ${inserted} observations were included in the backfill run.`);
+      await refreshAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function handleSeedDemoMarkets() {
     setError("");
     setStatus("");
@@ -404,6 +495,9 @@ export default function AdminPage() {
           <span className="muted">
             Recommended for a fresh arena because it creates markets and links them to the right pipeline series in one step.
           </span>
+          <span className="muted">
+            Volcano history backfill is separate: use the Smithsonian card below to clean bad legacy rows and pull archived weekly counts for charts.
+          </span>
           <button className="btn primary" onClick={handleSeedDemoMarkets} type="button">
             Seed demo markets
           </button>
@@ -435,9 +529,16 @@ export default function AdminPage() {
             <strong>{control.label}</strong>
             <span className="muted">{control.key}</span>
             <span>{control.description}</span>
-            <button className="btn secondary" onClick={() => handleFetchPipeline(control)} type="button">
-              Fetch latest data
-            </button>
+            <div className="actions">
+              <button className="btn secondary" onClick={() => handleFetchPipeline(control)} type="button">
+                Fetch latest data
+              </button>
+              {control.backfillPath ? (
+                <button className="btn secondary" onClick={() => handleBackfillVolcanoHistory(control)} type="button">
+                  Backfill history
+                </button>
+              ) : null}
+            </div>
           </article>
         ))}
       </section>
@@ -449,9 +550,21 @@ export default function AdminPage() {
           <span className="muted">1. Create the market with a pipeline-specific category like arctic systems, enso outlook, earthquakes, or solar flares.</span>
           <span className="muted">2. In the market card below, use Data link to attach the right source and series for resolution.</span>
           <span className="muted">Arctic: `nsidc_charctic_daily` + `daily_extent_million_sq_km`</span>
+          <span className="muted">Antarctic: `nsidc_antarctic_daily` + `daily_extent_million_sq_km`</span>
           <span className="muted">ENSO: `enso_oni` + `oni_index` by default, or `roni_index` for Relative ONI markets</span>
           <span className="muted">Earthquakes: `usgs_earthquakes` + `earthquake_magnitude`</span>
           <span className="muted">Solar flares: `nasa_donki_solar_flares` + `solar_flare_intensity`</span>
+          <span className="muted">Volcanoes: `smithsonian_volcanoes` + `weekly_eruption_count` or `active_volcano_count`</span>
+        </article>
+        <article className="market-card">
+          <strong>Quick templates</strong>
+          <div className="actions">
+            {MARKET_TEMPLATES.map((template) => (
+              <button className="btn secondary" key={template.key} onClick={() => applyTemplate(template)} type="button">
+                {template.label}
+              </button>
+            ))}
+          </div>
         </article>
         <form className="stack" onSubmit={handleCreateMarket}>
           <label className="field">
@@ -514,6 +627,7 @@ export default function AdminPage() {
           <strong>Example workflows</strong>
           <span className="muted">Fresh arena: Seed demo markets -&gt; Fetch latest data -&gt; Seed default bots -&gt; Run cycle now -&gt; Start scheduler.</span>
           <span className="muted">Manual ENSO market: Create market with category `enso outlook` -&gt; link `enso_oni` / `oni_index` -&gt; Fetch latest data -&gt; Run cycle now.</span>
+          <span className="muted">Volcano market: Seed demo markets -&gt; Fetch Smithsonian volcanoes -&gt; Run cycle now -&gt; inspect theses for event-chasing bots.</span>
           <span className="muted">One-off bot check: enter a target market slug, click Run bot now on a persona, then inspect the recent thesis and action summary.</span>
         </article>
         <span className="muted">
