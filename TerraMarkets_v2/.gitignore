@@ -1,13 +1,51 @@
+# OS/editor noise
 .DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 .venv/
-.env
 
+# Environment variables
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Node / Next.js
 node_modules/
 .next/
+out/
+dist/
+build/
+coverage/
+.turbo/
+.vercel/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
+# Local databases
 apps/api/dev.db
-apps/api/.coverage
-
+apps/api/dev.db-*
+apps/api/*.db
+apps/api/*.db-*
+apps/api/*.sqlite
+apps/api/*.sqlite3
+apps/api/*.sqlite-*
+apps/api/*.sqlite3-*

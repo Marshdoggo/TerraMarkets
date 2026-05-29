@@ -1,14 +1,14 @@
-# TerraMarkets_v2
+# TerraMarkets
 
-Clean v2 workspace for TerraMarkets.
+TerraMarkets is the active full-stack workspace for a prediction-market research and economic forecasting prototype. It focuses on Earth science, commodities, macroeconomic events, and public-data-driven probability markets, with an emphasis on explainable event modeling rather than real-money trading.
 
 ## Layout
 
-- `apps/api`: FastAPI backend with Alembic migrations, wallet ledger, LMSR trading, and auth
-- `apps/web`: Next.js frontend wired to the v2 API contract
-- `docs`: architecture and migration notes
-- `infra`: local compose setup
-- `scripts`: helper scripts
+- `apps/api`: FastAPI backend with auth, market APIs, data ingestion, bot arena services, Alembic migrations, and tests
+- `apps/web`: Next.js frontend for markets, datasets, bot profiles, theses, and portfolio views
+- `docs`: architecture, deployment, migration, and portfolio documentation
+- `infra/compose`: local Docker Compose examples
+- `scripts`: bootstrap, reset, seed, and demo helpers
 
 ## Backend
 
@@ -17,66 +17,73 @@ cd apps/api
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-The backend defaults to SQLite for local development at `apps/api/dev.db`.
-That file is your persistent local app state: users, wallets, markets, bot arena state, and stored data runs live there until you delete the DB or run a reset script.
+The backend defaults to SQLite at `apps/api/dev.db` for local development. That file stores local users, demo balances, markets, bot arena state, and data runs; it is intentionally ignored by git.
 
 ## Frontend
 
 ```bash
 cd apps/web
 npm install
+cp .env.local.example .env.local
 npm run dev
 ```
 
 Set `NEXT_PUBLIC_API_BASE_URL` if the API is not running on `http://localhost:8000`.
 
+## Environment
+
+Backend configuration is documented in `apps/api/.env.example`. Key variables include:
+
+- `DATABASE_URL`
+- `SECRET_KEY`
+- `NASA_DONKI_API_KEY`
+- `OPENAI_API_KEY`
+- `OPENAI_BOT_ENABLED`
+- `OPENAI_BOT_THESIS_ENABLED`
+- `OPENAI_BOT_SEARCH_ENABLED`
+
+The OpenAI and NASA keys are optional for local demos unless those ingestion or research-agent features are enabled.
+
 ## Current Scope
 
-This v2 keeps the product off-chain for now:
+The prototype includes:
 
-- email/password auth
-- access and refresh tokens
-- Terracoin wallet balances with signup funding and admin minting
-- multi-outcome markets
-- LMSR pricing and share purchases
-- admin resolution and settlement
+- email/password auth and token-based sessions
+- non-redeemable demo balances for local portfolio simulation
+- multi-outcome event markets
+- LMSR-style automated pricing
+- admin market seeding, resolution, and settlement workflows
+- public-data ingestion pipelines with citation-oriented metadata
+- a watch-only bot arena for comparing forecast strategies and thesis quality
 
-Terracoin is treated as a non-redeemable in-app balance for local MVP use.
-Smart contracts were intentionally not ported into the active v2 path yet.
+This project is not a production trading venue, gambling product, investment service, or financial advice tool.
 
-## Observatory Expansion
-
-The active v2 workspace now includes:
-
-- a watch-only public bot observatory
-- expanded science pipelines spanning cryosphere and geohazards
-- structured bot citations for stored datasets and curated official web sources
-- a larger bot arena with distinct strategy types
-
-Key local env flags for the research layer:
+## Verification
 
 ```bash
-OPENAI_BOT_ENABLED=true
-OPENAI_BOT_THESIS_ENABLED=true
-OPENAI_BOT_SEARCH_ENABLED=true
-OPENAI_BOT_SEARCH_ALLOWED_DOMAINS=["nsidc.org","volcano.si.edu","usgs.gov","earthquake.usgs.gov","swpc.noaa.gov","nhc.noaa.gov","cpc.ncep.noaa.gov","noaa.gov","nasa.gov"]
+cd apps/api
+source .venv/bin/activate
+python -m pytest -q
 ```
 
-## Deployment
+```bash
+cd apps/web
+npm run build
+```
+
+## Deployment Notes
 
 Recommended first public deployment:
 
 - frontend on Vercel
-- API on Render or Railway
+- API on Render, Railway, or a comparable Python hosting platform
 - managed Postgres for `DATABASE_URL`
 
-The first public release should stay watch-only:
+The first public release should remain watch-only: markets, datasets, bot profiles, leaderboards, and theses can be visible while admin-only market creation, bot controls, seeding, and data refresh stay protected.
 
-- public markets, datasets, bot profiles, leaderboards, and theses
-- admin-only bot controls, market creation, seeding, and data refresh
-
-See `docs/deployment.md` for the production setup checklist.
+See `docs/deployment.md` for the production setup checklist and `docs/PORTFOLIO_SUMMARY.md` for resume-friendly positioning.
