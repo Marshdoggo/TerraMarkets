@@ -1,6 +1,6 @@
 # TerraMarkets
 
-TerraMarkets is a conceptual prediction-market research and economic forecasting platform for Earth science, commodities, macroeconomic events, and other public-data-driven indicators. The project explores how market-implied probabilities, structured event modeling, and transparent data pipelines can help analysts reason about uncertain real-world outcomes without positioning the product as gambling, crypto speculation, or financial advice.
+TerraMarkets is a prediction-market research and economic forecasting prototype using public datasets and event modeling.
 
 ## Problem
 
@@ -94,15 +94,3 @@ Local `.env` files, SQLite databases, virtual environments, build output, and de
 - Portfolio page showing simulated positions and market exposure
 - Admin/demo seeding flow for local market setup
 
-## Roadmap
-
-- Promote the active v2 workspace to the repository root after publication planning
-- Add production-ready Postgres configuration and migration runbooks
-- Expand public-data connectors for commodities, macro indicators, and climate risk
-- Add model evaluation metrics for forecast calibration and thesis quality
-- Improve screenshot/demo fixtures for portfolio presentation
-- Harden authentication/session handling before any public multi-user deployment
-
-## Portfolio Framing
-
-TerraMarkets demonstrates full-stack product engineering, data ingestion design, probabilistic event modeling, and financial/economic forecasting concepts. It is best presented as a research prototype for turning public datasets into explainable probability estimates and analyst-facing forecasting workflows.
